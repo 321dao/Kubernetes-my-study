@@ -1,3 +1,5 @@
+git clone https://github.com/hx6007/Kubernetes-my-study.git 
+
 master上
 
 Kubernetes-my-study/master/0-ssh master需要和各个节点建立ssh互信
