@@ -1,4 +1,5 @@
 master上
+
 Kubernetes-my-study/master/0-ssh master需要和各个节点建立ssh互信
 
 Kubernetes-my-study/master/certificate.sh 需要修改ip
