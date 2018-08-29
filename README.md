@@ -1,3 +1,5 @@
+因git下载太慢，可以到本机搜索 Kubernetes-my-study.tag.gz  ，上传到服务器
+
 git clone https://github.com/hx6007/Kubernetes-my-study.git 
 
 
