@@ -1,6 +1,13 @@
 git clone https://github.com/hx6007/Kubernetes-my-study.git 
 
-cd && mkdir .ssh && cd .ssh/ && ssh-keygen -t rsa
+
+cd 
+
+mkdir .ssh 
+
+cd .ssh/
+
+ssh-keygen -t rsa
 
 ssh-copy-id -i /root/.ssh/id_rsa.pub root@192.168.224.144
 
