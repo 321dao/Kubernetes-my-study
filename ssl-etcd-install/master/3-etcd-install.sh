@@ -6,11 +6,11 @@ cp ../soft/etcd-v3.3.9-linux-amd64.tar.gz ./
 tar xvf etcd-v3.3.9-linux-amd64.tar.gz
 cd etcd-v3.3.9-linux-amd64
 mv etcd etcdctl /opt/kubernetes/bin/
-systemctl daemon-reload
-systemctl enable etcd
-systemctl start etcd
 echo "export K8S_HOME=/opt/kubernetes" >> /etc/profile
 echo "export PATH=\$PATH:\${K8S_HOME}/bin" >> /etc/profile
 source /etc/profile
+systemctl daemon-reload
+systemctl enable etcd
+systemctl start etcd
 
 
