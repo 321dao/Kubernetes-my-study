@@ -6,8 +6,8 @@ mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
 wget -O /etc/yum.repos.d/CentOS-Base.repo  http://mirrors.163.com/.help/CentOS7-Base-163.repo
 yum clean all
 yum makecache
-hostname k8s-master
-echo k8s-master > /etc/hostname
+hostname k8s-node-1
+echo k8s-node-1 > /etc/hostname
 
 sed -i 's/enforcing/disabled/g' /etc/selinux/config
 setenforce 0
