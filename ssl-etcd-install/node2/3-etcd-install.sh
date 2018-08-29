@@ -9,3 +9,6 @@ mv etcd etcdctl /opt/kubernetes/bin/
 systemctl daemon-reload
 systemctl enable etcd
 systemctl start etcd
+echo "export K8S_HOME=/opt/kubernetes" >> /etc/profile
+echo "export PATH=\$PATH:\${K8S_HOME}/bin" >> /etc/profile
+source /etc/profile
