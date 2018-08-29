@@ -6,6 +6,6 @@ cp ../soft/etcd-v3.3.9-linux-amd64.tar.gz ./
 tar xvf etcd-v3.3.9-linux-amd64.tar.gz
 cd etcd-v3.3.9-linux-amd64
 mv etcd etcdctl /opt/kubernetes/bin/
-ystemctl daemon-reload
+systemctl daemon-reload
 systemctl enable etcd
 systemctl start etcd
