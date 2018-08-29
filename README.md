@@ -26,6 +26,16 @@ Kubernetes-my-study/master/6-scp-pem.sh 需要修改ip
 Kubernetes-my-study/node1/etcd 需要修改ip
 
 
+最后检查健康状态
+
+cd /opt/kubernetes/ssl
+
+/opt/kubernetes/bin/etcdctl \
+--ca-file=ca.pem --cert-file=server.pem --key-file=server-key.pem \
+--endpoints="https://192.168.224.142:2379,https://192.168.224.143:2379,https://192.168.224.144:2379" \
+cluster-health
+
+
 
 
 
