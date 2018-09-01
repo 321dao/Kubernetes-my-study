@@ -5,7 +5,7 @@ echo "=  mkdir -p /opt/kubernetes/{bin,cfg,ssl}   ="
 echo "============================================="
 echo "============================================="
 
-sleep 10
+sleep 20
 
 hostname k8s-master
 echo k8s-master > /etc/hostname
