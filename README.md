@@ -44,21 +44,3 @@ cd /opt/kubernetes/ssl
 --endpoints="https://192.168.224.142:2379,https://192.168.224.143:2379,https://192.168.224.144:2379" \
 cluster-health
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

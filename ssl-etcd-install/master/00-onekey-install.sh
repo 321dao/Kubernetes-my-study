@@ -35,14 +35,10 @@ mv etcd etcdctl /opt/kubernetes/bin/
 echo "export K8S_HOME=/opt/kubernetes" >> /etc/profile
 echo "export PATH=\$PATH:\${K8S_HOME}/bin" >> /etc/profile
 source /etc/profile
-systemctl daemon-reload
-systemctl enable etcd
-systemctl start etcd
-#scp -r /opt/kubernetes/cfg/ root@192.168.224.143:/opt/kubernetes/
-#scp -r /opt/kubernetes/cfg/ root@192.168.224.144:/opt/kubernetes/
 scp -r /opt/kubernetes/bin/ root@192.168.224.143:/opt/kubernetes/
 scp -r /opt/kubernetes/bin/ root@192.168.224.144:/opt/kubernetes/
 scp -r /opt/kubernetes/ssl/ root@192.168.224.144:/opt/kubernetes/
 scp -r /opt/kubernetes/ssl/ root@192.168.224.143:/opt/kubernetes/
-#scp /usr/lib/systemd/system/etcd.service root@192.168.224.143:/usr/lib/systemd/system/
-#scp /usr/lib/systemd/system/etcd.service root@192.168.224.144:/usr/lib/systemd/system/
+systemctl daemon-reload
+systemctl enable etcd
+systemctl start etcd
