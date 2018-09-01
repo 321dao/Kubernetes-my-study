@@ -11,3 +11,5 @@ cd /opt/kubernetes/ssl/
 --ca-file=ca.pem --cert-file=server.pem --key-file=server-key.pem \
 --endpoints="https://192.168.224.142:2379,https://192.168.224.143:2379,https://192.168.224.144:2379" \
 set /coreos.com/network/config '{ "Network": "172.17.0.0/16", "Backend": {"Type": "vxlan"}}'
+
+ iptables -I INPUT -s 192.168.0.0/24 -j ACCEPT
