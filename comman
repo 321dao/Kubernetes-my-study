@@ -1,0 +1,176 @@
+八、查询集群状态
+在Master执行查看集群节点：
+# kubectl get node
+[root@master k8s]# kubectl get node
+NAME              STATUS    ROLES     AGE       VERSION
+192.168.224.143   Ready     <none>    8m        v1.9.0
+192.168.224.144   Ready     <none>    8m        v1.9.0
+
+查看组件状态：
+# kubectl get cs
+
+[root@master k8s]# kubectl get cs
+NAME                 STATUS    MESSAGE              ERROR
+controller-manager   Healthy   ok
+etcd-0               Healthy   {"health": "true"}
+scheduler            Healthy   ok
+
+九、启动一个测试示例
+启动一个Nginx副本示例：
+# kubectl run nginx --image=nginx --replicas=3
+
+[root@master k8s]#  kubectl run nginx --image=nginx --replicas=3
+deployment "nginx" created
+
+
+[root@master k8s]# kubectl get pods
+NAME                   READY     STATUS    RESTARTS   AGE
+nginx-8586cf59-qb47l   1/1       Running   0          1m
+nginx-8586cf59-tbz9p   1/1       Running   0          1m
+nginx-8586cf59-vp9vk   1/1       Running   0          1m
+
+查看
+
+[root@master k8s]# kubectl describe pod/nginx-8586cf59-qb47l
+Name:           nginx-8586cf59-qb47l
+Namespace:      default
+Node:           192.168.224.144/192.168.224.144
+Start Time:     Tue, 28 Aug 2018 14:08:09 +0800
+Labels:         pod-template-hash=41427915
+                run=nginx
+Annotations:    <none>
+Status:         Running
+IP:             172.17.0.3
+Controlled By:  ReplicaSet/nginx-8586cf59
+Containers:
+  nginx:
+    Container ID:   docker://30bc47ccbb2ea56598cdf13fe42715221c9b56d3f357c8a7c6027ea7b3750944
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:d85914d547a6c92faa39ce7058bd7529baacab7e0cd4255442b04577c4d1f424
+    Port:           <none>
+    State:          Running
+      Started:      Tue, 28 Aug 2018 14:08:29 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:         <none>
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:         <none>
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason     Age   From                      Message
+  ----    ------     ----  ----                      -------
+  Normal  Scheduled  3m    default-scheduler         Successfully assigned nginx-8586cf59-qb47l to 192.168.224.144
+  Normal  Pulling    3m    kubelet, 192.168.224.144  pulling image "nginx"
+  Normal  Pulled     3m    kubelet, 192.168.224.144  Successfully pulled image "nginx"
+  Normal  Created    3m    kubelet, 192.168.224.144  Created container
+  Normal  Started    3m    kubelet, 192.168.224.144  Started container
+
+[root@master k8s]#  kubectl run nginx --image=nginx --replicas=3
+这条命令创建了这么多的资源
+
+查看所有
+[root@master k8s]# kubectl get all
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           12m
+
+NAME                DESIRED   CURRENT   READY     AGE
+rs/nginx-8586cf59   3         3         3         12m
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           12m
+
+NAME                DESIRED   CURRENT   READY     AGE
+rs/nginx-8586cf59   3         3         3         12m
+
+NAME                      READY     STATUS    RESTARTS   AGE
+po/nginx-8586cf59-qb47l       1/1       Running   0          12m
+po/nginx-8586cf59-tbz9p       1/1       Running   0          12m
+po/nginx-8586cf59-vp9vk       1/1       Running   0          12m
+
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   1h
+紫色字体，涉及到部署之后怎么访问
+
+
+查看pod信息
+[root@master k8s]# kubectl get pods -o wide
+NAME                   READY     STATUS    RESTARTS   AGE       IP           NODE
+nginx-8586cf59-qb47l      1/1       Running   0          15m       172.17.0.3   192.168.224.144
+nginx-8586cf59-tbz9p      1/1       Running   0          15m       172.17.0.2   192.168.224.144
+nginx-8586cf59-vp9vk      1/1       Running   0          15m       172.17.0.2   192.168.224.143
+
+
+
+
+pod正常运行后，创建Service：涉及到部署之后怎么访问
+# kubectl expose deployment nginx --port=88 --target-port=80 --type=NodePort
+ Deployment：刚才创建的就是这个 deployment
+ Nginx：这是一个标签
+查看帮助信息
+
+# kubectl get svc nginx
+[root@master k8s]# kubectl get svc
+NAME         TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+kubernetes   ClusterIP   10.10.10.1     <none>        443/TCP        1h
+nginx        NodePort    10.10.10.229   <none>        88:42937/TCP   8m
+42937 这个端口可以让外部访问，访问的方式是，node-ip加42937端口
+
+[root@node01 k8s]# iptables-save | grep 42937
+-A KUBE-NODEPORTS -p tcp -m comment --comment "default/nginx:" -m tcp --dport 42937 -j KUBE-MARK-MASQ
+-A KUBE-NODEPORTS -p tcp -m comment --comment "default/nginx:" -m tcp --dport 42937 -j KUBE-SVC-4N57TFCL4MD7ZTDA
+
+
+[root@node01 k8s]# iptables-save | grep 88
+-A KUBE-SERVICES -d 10.10.10.229/32 -p tcp -m comment --comment "default/nginx: cluster IP" -m tcp --dport 88 -j KUBE-SVC-4N57TFCL4MD7ZTDA
+
+
+
+查看svc关联了哪些容器
+[root@master k8s]# kubectl get endpoints nginx
+NAME      ENDPOINTS                                   AGE
+nginx     172.17.0.2:80,172.17.0.2:80,172.17.0.3:80   9m
+
+
+[root@master k8s]# kubectl get all -o wide
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES    SELECTOR
+deploy/nginx   3         3         3            3           25m       nginx        nginx     run=nginx
+
+NAME                DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES    SELECTOR
+rs/nginx-8586cf59   3         3         3         25m       nginx        nginx     pod-template-hash=41427915,run=nginx
+pod-template-hash=41427915  这是默认生成的标签
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES    SELECTOR
+deploy/nginx   3         3         3            3           25m       nginx        nginx     run=nginx
+
+NAME                DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES    SELECTOR
+rs/nginx-8586cf59   3         3         3         25m       nginx        nginx     pod-template-hash=41427915,run=nginx
+
+NAME                      READY     STATUS    RESTARTS   AGE       IP           NODE
+po/nginx-8586cf59-qb47l   1/1       Running   0          25m       172.17.0.3   192.168.224.144
+po/nginx-8586cf59-tbz9p   1/1       Running   0          25m       172.17.0.2   192.168.224.144
+po/nginx-8586cf59-vp9vk   1/1       Running   0          25m       172.17.0.2   192.168.224.143
+
+NAME             TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE       SELECTOR
+svc/kubernetes   ClusterIP   10.10.10.1     <none>        443/TCP        1h        <none>
+svc/nginx        NodePort    10.10.10.229   <none>        88:42937/TCP   5m        run=nginx
+
+
+
+
+在Node节点访问：
+curl <CLUSTER-IP>:PORT
+
+[root@node01 k8s]# curl 10.10.10.229:88
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+**在windows上不能访问这个ip
