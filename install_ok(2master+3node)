@@ -1,8 +1,12 @@
 Kubernetes 部署 1.9.7 高可用版
+
  2018/08/30  Kubernetes
+ 
 前言
 在部署之前，首先感谢 手动搭建高可用的kubernetes 集群 博文的作者【阳明】，本文对kubernetes版本做了升级，其中一部分内容作了一下修改及完善。
+
 一、服务器规划
+
 角色	IP地址
 Master01 && etcd01 && haproxy01	192.168.224.181
 Master02 && etcd02 && haproxy02	192.168.224.182
@@ -22,7 +26,9 @@ iptables -A INPUT -p tcp -m state --state NEW -m tcp --dport 2380 -j ACCEPT
 
 
 二、设定集群环境变量
+
 后面的部署将会使用到的全局变量，定义如下（根据自己的机器、网络修改），将上面变量保存为: env.sh，然后将脚本拷贝到所有机器的/usr/k8s/bin目录。
+
  mkdir -pv /usr/k8s/bin
  cd /usr/k8s/bin
  cat << EOF  >  env.sh
@@ -50,13 +56,16 @@ EOF
 chmod +x env.sh
 
 
+
 为方便后面迁移，我们在集群内定义一个域名用于访问 apiserver，在每个节点的/etc/hosts文件中添加记录：192.168.224.181 k8s-api.virtual.local k8s-api
 echo "192.168.224.181 k8s-api.virtual.local k8s-api" >>  /etc/hosts
 
 
 其中 192.168.224.181 为 master01 的 IP，暂时使用该 IP 来做 apiserver 的负载地址。
+
 三、创建 CA 证书和密钥
 kubernetes 系统各个组件需要使用 TLS 证书对通信进行加密，这里我们使用 CloudFlare 的 PKI 工具集cfssl 来生成 Certificate Authority(CA) 证书和密钥文件， CA 是自签名的证书，用来签名后续创建的其他 TLS 证书。
+
 3.1、安装 CFSSL
 在 Master01 上面安装后复制到其它所有服务器上的 /usr/k8s/bin/ 目录。
 
@@ -135,8 +144,11 @@ EOF
 
 生成CA 证书和私钥：
  cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+ 
+ 
 3.3、分发证书
 将生成的 CA 证书、密钥文件、配置文件拷贝到所有机器的/etc/kubernetes/ssl目录下面：
+
 先所有服务器都创建目录；   
  mkdir -pv /etc/kubernetes/ssl
 
@@ -157,6 +169,7 @@ kubernetes 系统使用 etcd 存储所有的数据，我们这里部署3个节�
 •	etcd01：192.168.224.181
 •	etcd02：192.168.224.182
 •	etcd03：192.168.224.183
+
 4.1、 定义环境变量
 使用到的变量如下：
 Master01上
@@ -169,7 +182,9 @@ export NODE_IPS="192.168.224.181 192.168.224.182 192.168.224.183" # etcd 集群�
 export ETCD_NODES=etcd01=https://192.168.224.181:2380,etcd02=https://192.168.224.182:2380,etcd03=https://192.168.224.183:2380
 EOF
  source /usr/k8s/bin/etcd_env.sh
+ 
 # 导入用到的其它全局变量：ETCD_ENDPOINTS、FLANNEL_ETCD_PREFIX、CLUSTER_CIDR
+
  source /usr/k8s/bin/env.sh
 
 注意：以上变量在三台 etcd 服务器上都要操作，注意修改名称和 NODE_IP。
@@ -183,7 +198,7 @@ export NODE_IPS="192.168.224.181 192.168.224.182 192.168.224.183" # etcd 集群�
 export ETCD_NODES=etcd01=https://192.168.224.181:2380,etcd02=https://192.168.224.182:2380,etcd03=https://192.168.224.183:2380
 EOF
  source /usr/k8s/bin/etcd_env.sh
-# 导入用到的其它全局变量：ETCD_ENDPOINTS、FLANNEL_ETCD_PREFIX、CLUSTER_CIDR
+ 
  source /usr/k8s/bin/env.sh
 
 
@@ -197,8 +212,7 @@ export NODE_IPS="192.168.224.181 192.168.224.182 192.168.224.183" # etcd 集群�
 export ETCD_NODES=etcd01=https://192.168.224.181:2380,etcd02=https://192.168.224.182:2380,etcd03=https://192.168.224.183:2380
 EOF
  source /usr/k8s/bin/etcd_env.sh
-# 导入用到的其它全局变量：ETCD_ENDPOINTS、FLANNEL_ETCD_PREFIX、CLUSTER_CIDR
- source /usr/k8s/bin/env.sh
+  source /usr/k8s/bin/env.sh
 
 
 4.2、下载 etcd 二进制文件
@@ -210,6 +224,7 @@ cd /usr/local/src/
  sudo mv etcd-v3.3.9-linux-amd64/etcd* /usr/k8s/bin/
  
 以上操作在三台 ETCD 服务器都要操作。
+
 4.3、创建TLS 密钥和证书
 为了保证通信安全，客户端(如etcdctl)与 etcd 集群、etcd 集群之间的通信需要使用TLS 加密。
 创建 etcd 证书签名请求：
@@ -251,7 +266,9 @@ cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
   -profile=kubernetes etcd-csr.json | cfssljson -bare etcd
 
 以上操作在三台 ETCD 服务器都要操作。
+
 4.4、创建 etcd 的 systemd unit 文件
+
 # 必须要先创建工作目录，生产中建议是单独的磁盘作为数据存储目录
 
  sudo mkdir -pv /var/lib/etcd 
@@ -301,6 +318,7 @@ systemctl status etcd
 
 
 最先启动的 etcd 进程会卡住一段时间，等待其他节点启动加入集群，在所有的 etcd 节点重复上面的步骤，直到所有的机器etcd 服务都已经启动。
+
 4.6、验证服务
 部署完 etcd 集群后，在任一 etcd 节点上执行下面命令：
 
@@ -333,6 +351,7 @@ kubectl 默认从~/.kube/config配置文件中获取访问kube-apiserver 地址�
  export KUBE_APISERVER="https://${MASTER_URL}:6443"
 
 注意这里的KUBE_APISERVER地址，因为我们还没有安装haproxy，所以暂时需要手动指定使用apiserver的6443端口，等haproxy安装完成后就可以用使用443端口转发到6443端口去了。
+
 5.2、下载 kubectl
 下载地址：
 https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG-1.9.md#v197
@@ -436,6 +455,7 @@ cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
 
 六、部署 Flannel 网络
 需要在所有的Node节点安装。
+
 6.1、配置环境变量
 
 # 当前部署节点的IP
@@ -444,6 +464,7 @@ cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
  source /usr/k8s/bin/env.sh
 
 6.2、创建TLS 密钥和证书
+
 etcd 集群启用了双向 TLS 认证，所以需要为 flanneld 指定与etcd 集群通信的CA 和密钥。
 创建flanneld 证书签名请求：
 
@@ -469,6 +490,7 @@ EOF
 
 
 生成flanneld 证书和私钥：
+
  export PATH=/usr/k8s/bin:$PATH
 
  cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
@@ -487,6 +509,7 @@ EOF
 
 
 6.4、向etcd 写入集群Pod 网段信息
+
 该步骤只需在第一次部署 Flannel 网络时执行，后续在其他节点上部署Flanneld 时无需再写入该信息。
 在 etcd03 节点，也就是 node01 节点上执行。
  source /usr/k8s/bin/env.sh
@@ -500,9 +523,15 @@ etcdctl \
 
 # 得到如下反馈信息
 {"Network":"172.30.0.0/16", "SubnetLen": 24, "Backend": {"Type": "vxlan"}}
+
+
 •	写入的 Pod 网段(${CLUSTER_CIDR}，172.30.0.0/16) 必须与kube-controller-manager 的 –cluster-cidr 选项值一致；
+
+
 6.5、安装和配置 flanneld
 前往flanneld release页面下载最新版的flanneld 二进制文件。
+
+
  cd /usr/local/src && mkdir flannel
  wget https://github.com/coreos/flannel/releases/download/v0.10.0/flannel-v0.10.0-linux-amd64.tar.gz
 tar xvf flannel-v0.10.0-linux-amd64.tar.gz -C flannel
@@ -539,6 +568,7 @@ EOF
 
 mk-docker-opts.sh脚本将分配给flanneld 的Pod 子网网段信息写入到/run/flannel/docker 文件中，后续docker 启动时使用这个文件中的参数值为 docker0 网桥
 flanneld 使用系统缺省路由所在的接口和其他节点通信，对于有多个网络接口的机器(内网和公网)，可以用 –iface 选项值指定通信接口(上面的 systemd unit 文件没指定这个选项)
+
 6.6、启动 flanneld
 
 cp -v flanneld.service /etc/systemd/system/
@@ -548,9 +578,12 @@ systemctl start flanneld
 systemctl status flanneld
 
 6.7、检查flanneld 服务
+
 ifconfig flannel.1
+
 6.8、检查分配给各flanneld 的Pod 网段信息
 在任意一台 etcd 节点执行
+
 source /usr/k8s/bin/env.sh
 
 $ # 查看集群 Pod 网段(/16)
@@ -569,6 +602,8 @@ $ # 查看已分配的 Pod 子网段列表(/24)
   --cert-file=/etc/flanneld/ssl/flanneld.pem \
   --key-file=/etc/flanneld/ssl/flanneld-key.pem \
   ls ${FLANNEL_ETCD_PREFIX}/subnets
+  
+  
  # 查看某一 Pod 网段对应的 flanneld 进程监听的 IP 和网络参数
  
 etcdctl \
@@ -605,17 +640,24 @@ kube-scheduler、kube-controller-manager 和 kube-apiserver 三者的功能紧�
 同时只能有一个 kube-scheduler、kube-controller-manager 进程处于工作状态，如果运行多个，则需要通过选举产生一个 leader；
 •	
 注意：以下操作在 master01 和 master02 上面都要操作。
+
 7.1、配置环境变量
 # 当前部署的 master 机器IP
+
  export NODE_IP=192.168.224.181  
  source /usr/k8s/bin/env.sh
+ 
 7.2、下载最新版本的二进制文件
 在 kubernetes changelog 页面下载最新版本的文件：已经下载到本地，从本地上传上来，本地搜索 kubernetes-server-linux-amd64.tar.gz
+
  cd /usr/local/src
  wget https://dl.k8s.io/v1.9.7/kubernetes-server-linux-amd64.tar.gz
  tar -xzvf kubernetes-server-linux-amd64.tar.gz
+ 
 将二进制文件拷贝到/usr/k8s/bin目录
+
  sudo cp -rv kubernetes/server/bin/{kube-apiserver,kube-controller-manager,kube-scheduler} /usr/k8s/bin/
+ 
 7.3、创建kubernetes 证书
 创建kubernetes 证书签名请求：
 
@@ -883,13 +925,17 @@ systemctl status kube-scheduler
 
 
 7.7、验证 master 节点
+
 $ kubectl get componentstatuses
+
 NAME                 STATUS    MESSAGE              ERROR
 controller-manager   Healthy   ok                   
 scheduler            Healthy   ok                   
 etcd-2               Healthy   {"health": "true"}   
 etcd-0               Healthy   {"health": "true"}   
 etcd-1               Healthy   {"health": "true"} }
+
+
 7.8、启动 Master02 节点的Master服务
 # 启动 apiserver
 
@@ -923,9 +969,12 @@ systemctl status kube-scheduler
 八、配置 kube-apiserver 高可用
 按照上面的方式在master01与master02机器上安装kube-apiserver、kube-controller-manager、kube-scheduler，但是现在我们还是手动指定访问的6443和8080端口的，因为我们的域名k8s-api.virtual.local对应的master01节点直接通过 http 和 https 还不能访问，这里我们使用 haproxy 来代替请求。
 明白什么意思吗？就是我们需要将http默认的80端口请求转发到apiserver的8080端口，将https默认的443端口请求转发到apiserver的6443端口，所以我们这里使用haproxy来做请求转发。
+
 8.1、安装 haproxy
 在两台Master节点上安装
+
  yum install -y haproxy
+ 
 8.2、配置 haproxy
 由于集群内部有的组建是通过非安全端口访问 apiserver 的，有的是通过安全端口访问 apiserver 的，所以我们要配置http 和https 两种代理方式，配置文件 /etc/haproxy/haproxy.cfg：
 
@@ -1035,17 +1084,9 @@ server k8s-http-api-2 192.168.224.182:8080 check
 
 
 通过上面的配置文件我们可以看出通过https的访问将请求转发给apiserver 的6443端口了，http的请求转发到了apiserver 的8080端口。
+
 8.3、配置 haproxy 日志
- vim /etc/rsyslog.conf 
-# Provides UDP syslog reception
-$ModLoad imudp  # 取消注释
-$UDPServerRun 514 # 取消注释
-# 在local7.* 下面添加下面这行
-local2.*       /var/log/haproxy.log
 
-
-
-综合命令
 sed -i '15s/#//' /etc/rsyslog.conf
 sed -i '16s/#//' /etc/rsyslog.conf
 sed -i '74i\local2.*                                                /var/log/haproxy.log'  /etc/rsyslog.conf
@@ -1077,27 +1118,14 @@ KeepAlived 是一个高可用方案，通过 VIP（即虚拟 IP）和心跳检�
 开启路由转发，这里我们定义虚拟IP为：192.168.224.186
 
 
-$ vi /etc/sysctl.conf# 添加以下内容
-net.ipv4.ip_forward = 1
-net.ipv4.ip_nonlocal_bind = 1
-# 验证并生效
-$ sysctl -p
-
-# 验证是否生效
-$ cat /proc/sys/net/ipv4/ip_forward
-1
-
-
-
-综合命令
-
-
 cat << EOF >> /etc/sysctl.conf
 net.ipv4.ip_forward = 1
 net.ipv4.ip_nonlocal_bind = 1
 EOF
 sysctl -p
 cat /proc/sys/net/ipv4/ip_forward
+
+
 安装 keepalived:
  
 yum install -y keepalived
@@ -1293,8 +1321,11 @@ journalctl -f -u keepalived
 
 验证虚拟IP
 在 Master01 节点上执行操作
+
 # 使用ifconfig -a 命令查看不到，要使用ip addr
+
 [root@k8s-master01 keepalived]# ip addr
+
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN 
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
     inet 127.0.0.1/8 scope host lo
@@ -1309,6 +1340,7 @@ journalctl -f -u keepalived
        valid_lft forever preferred_lft forever
     inet6 fe80::20c:29ff:fe47:adb/64 scope link 
        valid_lft forever preferred_lft forever
+       
 •	到这里，我们就可以将上面的 6443 端口和 8080 端口去掉了，
 •	可以手动将kubectl生成的config文件 (~/.kube/config) 中的 server 地址 6443 端口去掉，另外/etc/systemd/system/kube-controller-manager.service和/etc/systemd/system/kube-scheduler.service的--master参数中的8080端口去掉了，命令如下：
 
@@ -1318,66 +1350,71 @@ sed -i 's/:8080//g' /etc/systemd/system/kube-controller-manager.service
 
 
 •	然后分别重启这两个组件即可。
-# controller-manager
 
 systemctl daemon-reload
 systemctl restart kube-controller-manager
-systemctl status kube-controller-manager
-
-
-# kube-scheduler
-
 systemctl restart kube-scheduler
 systemctl status kube-scheduler
+systemctl status kube-controller-manager
 
 
 验证apiserver：关闭master01 节点上的kube-apiserver 进程，然后查看虚拟ip是否漂移到了master02 节点。
 然后我们就可以将第一步在/etc/hosts里面设置的域名对应的IP 更改为我们的虚拟IP了。
+
 验证集群状态
+
 [root@k8s-master01 ~]# kubectl get cs
+
 NAME                 STATUS    MESSAGE              ERROR
 controller-manager   Healthy   ok                   
 scheduler            Healthy   ok                   
 etcd-1               Healthy   {"health": "true"}   
 etcd-2               Healthy   {"health": "true"}   
 etcd-0               Healthy   {"health": "true"} 
+
 停止Master01 节点的 kube-apiserver 服务
+
 $ systemctl stop kube-apiserver
 验证 VIP 是否在Master02节点，获取集群状态信息
+
 [root@k8s-master02 ~]# ip a|grep 186
+
 inet 192.168.224.186/32 scope global ens33
 
 [root@k8s-master02 ~]# kubectl get cs
+
 NAME                 STATUS    MESSAGE              ERROR
 controller-manager   Healthy   ok                   
 scheduler            Healthy   ok                   
 etcd-0               Healthy   {"health": "true"}   
 etcd-1               Healthy   {"health": "true"}   
 etcd-2               Healthy   {"health": "true"}  
+
 九、部署 Node 节点
 kubernetes Node 节点包含如下组件：
 •	flanneld
 •	docker
 •	kubelet
 •	kube-proxy
+
 9.1、配置环境变量
+
 在三台 Node节点上执行
+
  source /usr/k8s/bin/env.sh
  export KUBE_APISERVER="https://${MASTER_URL}"  
+ 
  如果你没有安装`haproxy`的话，还是需要使用6443端口的哦
+ 
 # 当前部署的 Node节点 IP
+
 export NODE_IP=192.168.224.183  
 
 按照上面的步骤安装配置好flanneld，上面我们已经在三台 Node 节点安装了。
+
 9.2、开启路由转发
+
 修改/etc/sysctl.conf文件，添加下面的规则：
-$ vim /etc/sysctl.conf
-
-net.ipv4.ip_forward=1
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-
-综合命令
 
 cat << EOF >> /etc/sysctl.conf
 net.ipv4.ip_forward=1
@@ -1386,6 +1423,8 @@ net.bridge.bridge-nf-call-ip6tables=1
 EOF
 modprobe br_netfilter
 sysctl -p
+
+
 9.3、配置安装 docker
 你可以用二进制或yum install 的方式来安装 docker，然后修改 docker 的 systemd unit 文件 检查文件系统信息 如果你用的是 xfs 类型的文件系统，默认docker的存储驱动是 devicemaper 如果要使用overlay2 需要 xfs 文件系统的 ftype=1 才可以使用，查看 xfs 的 ftype:
  xfs_info /var/
@@ -1397,21 +1436,23 @@ mkfs.xfs -fn ftype=1 /dev/vdb
  mount /dev/vdb /data/
  mkdir /data/docker
  ln -sv /data/docker/ /var/lib/docker
+ 
+ 
 安装 Docker
  
-$ sudo yum install -y yum-utils \
+ sudo yum install -y yum-utils \
   device-mapper-persistent-data \
   lvm2
   
-$ sudo yum-config-manager \
+ sudo yum-config-manager \
     --add-repo \
     https://download.docker.com/linux/centos/docker-ce.repo
     
-$ yum -y install docker-ce
+ yum -y install docker-ce
+ 
 
 **修改 docker 的 systemd unit 文件**
 
-```bash
 
 mv /usr/lib/systemd/system/docker.service /usr/lib/systemd/system/docker.service.bak
 cat << EOF > /usr/lib/systemd/system/docker.service 
@@ -1486,27 +1527,38 @@ systemctl restart docker.service
 
 
 检查docker的存储驱动
+
 9.4、安装和配置kubelet
+
 kubelet 启动时向 kube-apiserver 发送 TLS bootstrapping 请求，需要先将 bootstrap token 文件中的 kubelet-bootstrap 用户赋予system:node-bootstrapper 角色，然后kubelet 才有权限创建认证请求(certificatesigningrequests)：
 kubelet就是运行在Node节点上的，所以这一步安装是在所有的Node节点上，如果你想把你的Master也当做Node节点的话，当然也可以在Master节点上安装的。
+
 在 Master01 节点上操作
 
  kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap
 
 clusterrolebinding "kubelet-bootstrap" created
 •	–user=kubelet-bootstrap 是文件 /etc/kubernetes/token.csv 中指定的用户名，同时也写入了文件 /etc/kubernetes/bootstrap.kubeconfig
+
 为 Node 请求创建一个RBAC 授权规则：
+
 [root@k8s-master01 ~]# kubectl create clusterrolebinding kubelet-nodes --clusterrole=system:node --group=system:nodes
 clusterrolebinding "kubelet-nodes" created
+
 然后下载最新的 kubelet 和kube-proxy 二进制文件（前面下载kubernetes 目录下面其实也有）：
+
+
 安装 kubelet 在三台Node节点上
-$ cd /usr/local/src
-$ wget https://dl.k8s.io/v1.9.7/kubernetes-server-linux-amd64.tar.gz
-$ tar -xzvf kubernetes-server-linux-amd64.tar.gz
-$ cd kubernetes
-$ tar -xzvf  kubernetes-src.tar.gz
-$ sudo cp -rv ./server/bin/{kube-proxy,kubelet} /usr/k8s/bin/
+
+cd /usr/local/src
+ wget https://dl.k8s.io/v1.9.7/kubernetes-server-linux-amd64.tar.gz
+ tar -xzvf kubernetes-server-linux-amd64.tar.gz
+ cd kubernetes
+ tar -xzvf  kubernetes-src.tar.gz
+ sudo cp -rv ./server/bin/{kube-proxy,kubelet} /usr/k8s/bin/
+
 9.5、创建 kubelet bootstapping kubeconfig 文件
+
 在三台Node节点上
 
  # 设置集群参数
@@ -1541,12 +1593,12 @@ $ sudo cp -rv ./server/bin/{kube-proxy,kubelet} /usr/k8s/bin/
  mv bootstrap.kubeconfig /etc/kubernetes/
 
 
-•	
+	
 –embed-certs 为 true 时表示将 certificate-authority 证书写入到生成的 bootstrap.kubeconfig 文件中；
-•	
-•	
+
+
 设置 kubelet 客户端认证参数时没有指定秘钥和证书，后续由 kube-apiserver 自动生成；
-•	
+
 **检查 bootstrap.kubeconfig **
 
   cat /etc/kubernetes/bootstrap.kubeconfig 
@@ -1593,7 +1645,7 @@ EOF
 
 启动 kubelet
 
- mv kubelet.service /etc/systemd/system/kubelet.service
+mv kubelet.service /etc/systemd/system/kubelet.service
 systemctl daemon-reload
 systemctl enable kubelet
 systemctl start kubelet
@@ -1615,16 +1667,23 @@ for i in `kubectl get csr|awk '{print $1}'|grep -v "NAME"`;do kubectl certificat
 
 
 # 查看 Node 节点
+
 [root@k8s-master01 ~]# kubectl get nodes
+
 NAME           STATUS    ROLES     AGE       VERSION
 192.168.224.183   Ready     <none>    2m        v1.9.7
 192.168.224.184   Ready     <none>    39s       v1.9.7
 192.168.224.185   Ready     <none>    2m        v1.9.7
+
+
 自动生成了kubelet kubeconfig 文件和公私钥：
+
 [root@k8s-node01 ~]# ls -l /etc/kubernetes/kubelet.kubeconfig
+
 -rw-------. 1 root root 2283 5月   4 17:16 /etc/kubernetes/kubelet.kubeconfig
 
 [root@k8s-node01 ~]# ls -l /etc/kubernetes/ssl/kubelet*
+
 -rw-r--r--. 1 root root 1046 5月   4 17:16 /etc/kubernetes/ssl/kubelet-client.crt
 -rw-------. 1 root root  227 5月   4 17:15 /etc/kubernetes/ssl/kubelet-client.key
 -rw-r--r--. 1 root root 1111 5月   4 17:02 /etc/kubernetes/ssl/kubelet.crt
@@ -1783,28 +1842,43 @@ EOF
 
 
 创建 Pod 和 Service服务：
+
 [root@k8s-master01 pod]# kubectl create -f nginx-ds.yaml 
+
 service "nginx-ds" created
 daemonset "nginx-ds" created
+
+
 执行下面的命令查看Pod 和SVC：
+
 [root@k8s-master01 pod]# kubectl get pods -o wide
+
 NAME             READY     STATUS    RESTARTS   AGE       IP            NODE
 nginx-ds-hzqm2   1/1       Running   0          2m        172.30.40.2   192.168.224.183
 nginx-ds-jhhgb   1/1       Running   0          2m        172.30.43.2   192.168.224.185
 nginx-ds-xf5qq   1/1       Running   0          2m        172.30.24.2   192.168.224.184
 
 [root@k8s-master01 pod]# kubectl get svc
+
 NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
 kubernetes   ClusterIP   10.254.0.1       <none>        443/TCP        2h
 nginx-ds     NodePort    10.254.136.253   <none>        80:32766/TCP   3m
+
+
 可以看到：
 •	服务IP：10.254.136.253
 •	服务端口：80
 •	NodePort端口：32766
+
+
 在所有 Node 上执行：
+
 curl  10.254.136.253
 curl 192.168.224.183:32766
+
 执行上面的命令预期都会输出nginx 欢迎页面内容，表示我们的Node 节点正常运行了。
+
+
 十、部署 kubedns 插件
 官方文件目录：kubernetes/cluster/addons/dns
 
@@ -2030,11 +2104,15 @@ EOF
 
 
 执行创建文件
+
 [root@k8s-master01 kubedns]# kubectl create -f kube-dns.yaml 
+
 service "kube-dns" created
 serviceaccount "kube-dns" created
 configmap "kube-dns" created
 deployment "kube-dns" created
+
+
 检查 kubedns 功能
 新建一个Deployment
 
@@ -2063,14 +2141,22 @@ EOF
 
 
 $ kubectl create -f my-nginx.yaml
+
 deployment "my-nginx" created
+
+
 Expose 该Deployment，生成my-nginx 服务
+
+
 $ kubectl expose deploy my-nginx
+
 [root@k8s-master01 pod]# kubectl get svc
+
 NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
 kubernetes   ClusterIP   10.254.0.1       <none>        443/TCP        2h
 my-nginx     ClusterIP   10.254.51.165    <none>        80/TCP         3s
 nginx-ds     NodePort    10.254.136.253   <none>        80:32766/TCP   13m
+
 然后创建另外一个Pod，查看/etc/resolv.conf是否包含kubelet配置的--cluster-dns 和--cluster-domain，是否能够将服务my-nginx 解析到上面显示的CLUSTER-IP 10.254.51.165 上
 
  cat > pod-nginx.yaml<<EOF
@@ -2101,6 +2187,7 @@ options ndots:5
 
 
 root@nginx:/# ping my-nginx
+
 PING my-nginx.default.svc.cluster.local (10.254.51.165): 48 data bytes
 ^C--- my-nginx.default.svc.cluster.local ping statistics ---
 2 packets transmitted, 0 packets received, 100% packet loss
@@ -2110,8 +2197,10 @@ PING kubernetes.default.svc.cluster.local (10.254.0.1): 48 data bytes
 2 packets transmitted, 0 packets received, 100% packet loss
  
 十一、部署 Dashboard 插件
+
 官方文件目录：kubernetes/cluster/addons/dashboard
 使用的文件如下：
+
 $ ls *.yaml
 dashboard-controller.yaml  dashboard-rbac.yaml  dashboard-service.yaml
 •	新加了 dashboard-rbac.yaml 文件，定义 dashboard 使用的 RoleBinding。
@@ -2192,29 +2281,46 @@ EOF
 
 
 执行所有定义文件
+
 $ ls *.yaml
+
 dashboard-controller.yaml  dashboard-rbac.yaml  dashboard-service.yaml
 $ kubectl create -f .
 deployment "kubernetes-dashboard" created
 serviceaccount "dashboard" created
 clusterrolebinding "dashboard" created
 service "kubernetes-dashboard" created
+
 检查执行结果
 查看分配的 NodePort
+
 $ kubectl get services kubernetes-dashboard -n kube-system
+
 NAME                   TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
 kubernetes-dashboard   NodePort   10.254.204.176   <none>        80:32092/TCP   49s
+
+
 •	NodePort 32092 映射到dashboard pod 80端口；
 检查 controller
+
 $ kubectl get deployment kubernetes-dashboard  -n kube-system
+
 NAME                   DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 kubernetes-dashboard   1         1         1            1           1m
+
+
 $ kubectl get pods  -n kube-system | grep dashboard
+
 kubernetes-dashboard-85f875c69c-mbljw   1/1       Running   0          2m
+
+
 访问dashboard
 kubernetes-dashboard 服务暴露了 NodePort，可以使用 http://NodeIP:nodePort 地址访问 dashboard，例如：http://192.168.224.184:23495
  
 由于缺少 Heapster 插件，当前 dashboard 不能展示 Pod、Nodes 的 CPU、内存等 metric 图形。
+
+
+
 十二、部署 Heapster 插件
 到 heapster release 页面下载最新版的 heapster
 
@@ -2222,18 +2328,27 @@ cd /usr/local/src;wget https://github.com/kubernetes/heapster/archive/v1.4.3.tar
 
 
 部署相关文件目录：/usr/local/src/heapster-1.4.3/deploy/kube-config
+
  cd /usr/local/src/heapster-1.4.3/deploy/kube-config/; ls influxdb/ 
 grafana.yaml  heapster.yaml  influxdb.yaml
 ls rbac/
 heapster-rbac.yaml
+
+
 为方便测试访问，修改 grafana.yaml下面的服务类型设置为type=NodePort
+
 修改 influxdb.yaml、grafana.yaml、heapster.yaml的 image 镜像地址
+
 index.tenxcloud.com/jimmy/heapster-amd64:v1.3.0-beta.1
 index.tenxcloud.com/jimmy/heapster-influxdb-amd64:v1.1.1
 index.tenxcloud.com/jimmy/heapster-grafana-amd64:v4.0.2
+
+
 执行所有文件
+
 $ kubectl create -f rbac/heapster-rbac.yaml
 clusterrolebinding "heapster" created
+
 $ kubectl create -f influxdb
 deployment "monitoring-grafana" created
 service "monitoring-grafana" created
@@ -2242,19 +2357,24 @@ deployment "heapster" created
 service "heapster" created
 deployment "monitoring-influxdb" created
 service "monitoring-influxdb" created
+
 检查执行结果
 检查 Deployment
 $ kubectl get deployments -n kube-system | grep -E 'heapster|monitoring'
 heapster               1         1         1            1           29m
 monitoring-grafana     1         1         1            1           29m
 monitoring-influxdb    1         1         1            1           29m
+
 检查 Pods
 $ kubectl get pods -n kube-system | grep -E 'heapster|monitoring'
 heapster-9bd589759-nz29g                1/1       Running   0          30m
 monitoring-grafana-5c8d68cb94-xtszf     1/1       Running   0          30m
 monitoring-influxdb-774cf8fcc6-b7qw7    1/1       Running   0          30m
+
 访问 grafana
+
 上面我们修改grafana 的Service 为NodePort 类型：
+
 [root@k8s-master01 kube-config]# kubectl get svc -n kube-system
 NAME                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)         AGE
 heapster               ClusterIP   10.254.170.2     <none>        80/TCP          30m
@@ -2262,11 +2382,14 @@ kube-dns               ClusterIP   10.254.0.2       <none>        53/UDP,53/TCP 
 kubernetes-dashboard   NodePort    10.254.204.176   <none>        80:32092/TCP    48m
 monitoring-grafana     NodePort    10.254.112.219   <none>        80:30879/TCP    30m
 monitoring-influxdb    ClusterIP   10.254.109.148   <none>        8086/TCP        30m
+
+
 则我们就可以通过任意一个节点加上上面的30879端口就可以访问grafana 了。
  
 十三、安装 Ingress
 Ingress 其实就是从 kuberenets 集群外部访问集群的一个入口，将外部的请求转发到集群内不同的 Service 上，其实就相当于 nginx、apache 等负载均衡代理服务器，再加上一个规则定义，路由信息的刷新需要靠 Ingress controller 来提供
 Ingress controller 可以理解为一个监听器，通过不断地与 kube-apiserver 打交道，实时的感知后端 service、pod 等的变化，当得到这些变化信息后，Ingress controller 再结合 Ingress 的配置，更新反向代理负载均衡器，达到服务发现的作用。其实这点和服务发现工具 consul的consul-template 非常类似。
+
 13.1、创建 namespace.yaml
 
 mkdir  -p /data/k8s/ingress 
@@ -2576,11 +2699,14 @@ EOF
 
 
 13.7、执行创建所有文件
+
 $ kubectl create -f .
+
 $ kubectl get pods -n ingress-nginx -o wide
 NAME                                        READY     STATUS    RESTARTS   AGE       IP             NODE
 default-http-backend-7ddd8d57f4-dtvgd       1/1       Running   0          7m        172.30.43.4    192.168.224.185
 nginx-ingress-controller-7494c4c66d-9r6j5   1/1       Running   0          7m        192.168.224.184   192.168.224.184
+
 13.8、测试 igress 服务是否正常
 创建 nginxds-ingress.yaml ，代理我们之前创建的 nginx-ds 服务
 
@@ -2601,6 +2727,7 @@ EOF
 
 
 创建 ingress
+
 $ kubectl create -f nginxds-ingress.yaml 
 ingress "hmdc" created$ kubectl get ingress
 NAME      HOSTS              ADDRESS   PORTS     AGE
