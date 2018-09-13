@@ -34,6 +34,8 @@ iptables -A INPUT -p tcp -m state --state NEW -m tcp --dport 2380 -j ACCEPT
 
 后面的部署将会使用到的全局变量，定义如下（根据自己的机器、网络修改），将上面变量保存为: env.sh，然后将脚本拷贝到所有机器的/usr/k8s/bin目录。
 
+
+
  mkdir -pv /usr/k8s/bin
  cd /usr/k8s/bin
  cat << EOF  >  env.sh
@@ -59,13 +61,11 @@ CLUSTER_DNS_DOMAIN="cluster.local."
 MASTER_URL="k8s-api.virtual.local"
 EOF
 
-
-
-
-为方便后面迁移，我们在集群内定义一个域名用于访问 apiserver，在每个节点的/etc/hosts文件中添加记录：192.168.224.181 k8s-api.virtual.local k8s-api
-
 echo "192.168.224.181 k8s-api.virtual.local k8s-api" >>  /etc/hosts
 source /usr/k8s/bin/env.sh
+
+
+
 
 其中 192.168.224.181 为 master01 的 IP，暂时使用该 IP 来做 apiserver 的负载地址。
 
