@@ -53,7 +53,7 @@ CLUSTER_DNS_DOMAIN="cluster.local."
 # MASTER API Server 地址
 MASTER_URL="k8s-api.virtual.local"
 EOF
-chmod +x env.sh
+
 
 
 
