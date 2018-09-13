@@ -54,12 +54,13 @@ CLUSTER_DNS_DOMAIN="cluster.local."
 MASTER_URL="k8s-api.virtual.local"
 EOF
 
-source /usr/k8s/bin/env.sh
+
 
 
 为方便后面迁移，我们在集群内定义一个域名用于访问 apiserver，在每个节点的/etc/hosts文件中添加记录：192.168.224.181 k8s-api.virtual.local k8s-api
-echo "192.168.224.181 k8s-api.virtual.local k8s-api" >>  /etc/hosts
 
+echo "192.168.224.181 k8s-api.virtual.local k8s-api" >>  /etc/hosts
+source /usr/k8s/bin/env.sh
 
 其中 192.168.224.181 为 master01 的 IP，暂时使用该 IP 来做 apiserver 的负载地址。
 
