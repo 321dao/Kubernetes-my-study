@@ -10,9 +10,9 @@ Kubernetes 部署 1.9.7 高可用版
 角色	IP地址
 Master01 && etcd01 && haproxy01	192.168.224.181
 Master02 && etcd02 && haproxy02	192.168.224.182
-Node01 && etcd03	192.168.224.183
-Node02	192.168.224.184
-Node03	192.168.224.185
+Node01 && etcd03 && flanneld && docker	192.168.224.183
+Node02 && flanneld  && docker	192.168.224.184
+Node03 && flanneld  && docker      192.168.224.185
 
 在所有节点执行：
 
