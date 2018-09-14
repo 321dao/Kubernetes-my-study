@@ -184,7 +184,7 @@ kubernetes 系统使用 etcd 存储所有的数据，我们这里部署3个节�
 •	etcd02：192.168.224.182
 •	etcd03：192.168.224.183
 
-4.1、 定义环境变量
+4.1、 定义环境变量  以上变量在三台 etcd 服务器上都要操作，不同服务器不同配置
 使用到的变量如下：
 Master01上
  
@@ -241,8 +241,9 @@ cd /usr/local/src/
 
 4.3、创建TLS 密钥和证书
 为了保证通信安全，客户端(如etcdctl)与 etcd 集群、etcd 集群之间的通信需要使用TLS 加密。
-创建 etcd 证书签名请求：
- 
+创建 etcd 证书签名请求：  以下操作在三台 ETCD 服务器都要操作。
+
+
 
  sudo mkdir -pv /etc/etcd/ssl
  cd  /etc/etcd/ssl
@@ -271,21 +272,30 @@ EOF
 
 
 
-•	hosts 字段指定授权使用该证书的etcd节点IP
-生成etcd证书和私钥：
+#	hosts 字段指定授权使用该证书的etcd节点IP
+#        生成etcd证书和私钥：
+
+
  
 cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
   -ca-key=/etc/kubernetes/ssl/ca-key.pem \
   -config=/etc/kubernetes/ssl/ca-config.json \
   -profile=kubernetes etcd-csr.json | cfssljson -bare etcd
+  
+  
+  
 
-以上操作在三台 ETCD 服务器都要操作。
+
 
 4.4、创建 etcd 的 systemd unit 文件
 
 # 必须要先创建工作目录，生产中建议是单独的磁盘作为数据存储目录
 
- sudo mkdir -pv /var/lib/etcd 
+以下操作在三台 ETCD 服务器都要操作。
+
+
+
+sudo mkdir -pv /var/lib/etcd 
 cd   /etc/systemd/system/
 cat > etcd.service <<EOF
 [Unit]
@@ -323,7 +333,14 @@ WantedBy=multi-user.target
 EOF
 
 
+
+
+
+
+
 4.5、启动etcd 服务
+
+
 
 systemctl daemon-reload
 systemctl enable etcd
@@ -331,10 +348,14 @@ systemctl start etcd
 systemctl status etcd
 
 
+
+
 最先启动的 etcd 进程会卡住一段时间，等待其他节点启动加入集群，在所有的 etcd 节点重复上面的步骤，直到所有的机器etcd 服务都已经启动。
 
 4.6、验证服务
 部署完 etcd 集群后，在任一 etcd 节点上执行下面命令：
+
+
 
 for ip in ${NODE_IPS}; do
   ETCDCTL_API=3 /usr/k8s/bin/etcdctl \
@@ -343,6 +364,9 @@ for ip in ${NODE_IPS}; do
   --cert=/etc/etcd/ssl/etcd.pem \
   --key=/etc/etcd/ssl/etcd-key.pem \
   endpoint health; done
+  
+  
+  
 
 输出如下结果
 https://192.168.224.181:2379 is healthy: successfully committed proposal: took = 1.778779ms
@@ -355,14 +379,22 @@ https://192.168.224.183:2379 is healthy: successfully committed proposal: took =
 
 
 可以看到上面的信息3个节点上的 etcd 均为 healthy ，则表示集群服务正常。
+
 五、配置 kubectl 命令行工具
+
 kubectl 默认从~/.kube/config配置文件中获取访问kube-apiserver 地址、证书、用户名等信息，需要正确配置该文件才能正常使用kubectl命令。
+
 需要将下载的kubectl 二进制文件和生产的~/.kube/config配置文件拷贝到需要使用kubectl 命令的机器上 ( 我这里拷贝到了所有机器上 )。
+
 注意：以下操作步骤都在Master01 服务器上操作，需要复制到其它4台服务器上的文件会有说明和执行命令。
-5.1、配置环境变量
+
+5.1、配置环境变量  Master01 服务器上
+
 
  source /usr/k8s/bin/env.sh
  export KUBE_APISERVER="https://${MASTER_URL}:6443"
+ 
+ 
 
 注意这里的KUBE_APISERVER地址，因为我们还没有安装haproxy，所以暂时需要手动指定使用apiserver的6443端口，等haproxy安装完成后就可以用使用443端口转发到6443端口去了。
 
@@ -390,6 +422,7 @@ wget https://dl.k8s.io/v1.9.7/kubernetes-client-linux-amd64.tar.gz
 5.3、创建admin 证书
 kubectl 与 kube-apiserver 的安全端口通信，需要为安全通信提供TLS 证书和密钥。创建admin 证书签名请求：
  
+cd 
 
 cat > admin-csr.json << EOF
 {
