@@ -107,7 +107,7 @@ source /etc/profile.d/k8s.sh
 
 
 
-3.2、创建 CA
+3.2、创建 CA  在Master01上
 创建 ca-config.json 文件
  
 mkdir ssl && cd ssl
