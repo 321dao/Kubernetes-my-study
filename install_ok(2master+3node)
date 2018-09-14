@@ -41,6 +41,7 @@ service iptables save
 
 后面的部署将会使用到的全局变量，定义如下（根据自己的机器、网络修改），将上面变量保存为: env.sh，然后将脚本拷贝到所有机器的/usr/k8s/bin目录。
 
+所有服务器执行
 
 
  mkdir -pv /usr/k8s/bin
