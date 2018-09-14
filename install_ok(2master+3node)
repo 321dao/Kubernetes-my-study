@@ -76,7 +76,7 @@ source /usr/k8s/bin/env.sh
 
 其中 192.168.224.181 为 master01 的 IP，暂时使用该 IP 来做 apiserver 的负载地址。
 
-三、创建 CA 证书和密钥
+三、创建 CA 证书和密钥    在Master01上操作
 kubernetes 系统各个组件需要使用 TLS 证书对通信进行加密，这里我们使用 CloudFlare 的 PKI 工具集cfssl 来生成 Certificate Authority(CA) 证书和密钥文件， CA 是自签名的证书，用来签名后续创建的其他 TLS 证书。
 
 3.1、安装 CFSSL
