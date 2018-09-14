@@ -21,6 +21,13 @@ https://github.com/hx6007/kubernetes_k8s_my_install/blob/master/README.md
 
 在所有节点执行：
 
+
+systemctl stop firewalld
+systemctl mask firewalld
+yum install iptables-services telnet nmap -y
+systemctl enable iptables
+systemctl restart iptables
+iptables -F
 sed -i 's/enforcing/disabled/g' /etc/selinux/config
 setenforce 0
 iptables -F
@@ -28,6 +35,7 @@ iptables -t nat -F
 iptables -I FORWARD -s 0.0.0.0/0 -d 0.0.0.0/0 -j ACCEPT  
 iptables -A INPUT -p tcp -m state --state NEW -m tcp --dport 2379 -j ACCEPT
 iptables -A INPUT -p tcp -m state --state NEW -m tcp --dport 2380 -j ACCEPT
+service iptables save
 
 
 二、设定集群环境变量
