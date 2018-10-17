@@ -185,4 +185,27 @@ Pod中的两个容器都通过.spec.containers[].volumesMounts来设置挂载数
 这里所谓Pod的重启，实际上是容器的重建，因为Pod容器退出后，之前容器中的数据将会丢失，如果需要持久化数据，那么需要使用数据卷进行持久化设置。
 Pod支持三种重启策略：Always（默认策略，当容器终止退出后总是重启容器）、OnFailure（当容器终止且异常退出时重启）、Never（从不重启）。
 
+在一些场景下，希望Pod调度到指定的Node上，比如，调度到专门用于测试的Node，如何实现呢？
+可以为Node定义特殊标签，并且在定义Pod时指明选择含有该标签的Node来创建。如：
+
+ # Kubectl label nodes node1 env=test
+
+
+ 定义Pod的时，通过设置Node Selector来选择Node：
+
+ apiVersion: v1 
+ kind: Pod 
+ metadata:     
+   name: testpod     
+   labels:         
+     -env: test 
+ spec:     
+   containers:     
+   -name: nginx     
+   image: nginx     
+   imagepullpolicy: Ifnotpresent 
+ nodeSelector: 
+ Nodename: node1
+
+ Pod创建成功后将会被分配到带有test标签的Node1节点上。除了设置Node Selector之外，Pod还可以通过Node Name直接指定Node，但还是建议使用Node Selector。因为通过Label进行选择是一种弱绑定，而直接指定Node Name是强绑定，Node失效时会导致Pod无法调度。
 
