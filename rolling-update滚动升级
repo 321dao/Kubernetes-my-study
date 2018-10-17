@@ -1,0 +1,16 @@
+Kubernetes中滚动升级的命令如下：
+
+# kubectl rolling-update my-test-v1 -f my-test-v2-rc.yaml --update-period=10s
+
+升级开始后，首先根据定义文件创建v2版本的RC，然后每隔10s（--update-period=10s）逐步增加v2版本的Pod副本数，并逐步减少v1版本Pod的副本数。
+
+升级完成之后，删除v1版本的RC，保留v2版本的RC，从而实现滚动升级。升级过程中如发生错误而导致中途退出，可以选择继续升级。
+
+Kubernetes能够智能地判断升级中断之前的状态，然后紧接着继续执行升级。
+
+当然也可以进行回退，命令如下：
+
+# kubectl rolling-update my-test-v1 -f my-test-v2-rc.yaml --update-period=10s --rollback
+
+回退的方式实际就是升级的逆操作，即逐步增加v1.0版本Pod的副本数，逐步减少v2版本Pod的副本数。
+
