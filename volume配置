@@ -79,3 +79,24 @@ spec:
 EOF
 
 
+
+
+cat  << EOF >  nginx-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+ # type: NodePort
+EOF
+
+
+
+
