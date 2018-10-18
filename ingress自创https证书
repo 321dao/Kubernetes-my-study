@@ -1,10 +1,13 @@
 
 自创证书
- mkdir https
-cd https/
-cfssl print-defaults csr > ca-csr.json
+[root@k8s-master ~]# mkdir https
+[root@k8s-master ~]# cd https/
+[root@k8s-master https]# cfssl print-defaults csr > ca-csr.json
 
-cat << EOF > ca-csr.json
+修改文件
+[root@k8s-master https]# vim ca-csr.json
+
+
 {
     "CN": "hx",
     "key": {
@@ -19,17 +22,25 @@ cat << EOF > ca-csr.json
         }
     ]
 }
-EOF 
+
+[root@k8s-master https]# cfssl print-defaults config > ca-config.json
+
+[root@k8s-master https]# cfssl gencert --initca ca-csr.json | cfssljson -bare ca -
+2018/09/26 23:18:09 [INFO] generating a new CA key and certificate from CSR
+2018/09/26 23:18:09 [INFO] generate received request
+2018/09/26 23:18:09 [INFO] received CSR
+2018/09/26 23:18:09 [INFO] generating key: rsa-2048
+2018/09/26 23:18:09 [INFO] encoded CSR
+2018/09/26 23:18:09 [INFO] signed certificate with serial number 456097036289797395356647078011203797761378527487
 
 
+[root@k8s-master https]# ls
+ca-config.json  ca.csr  ca-csr.json  ca-key.pem  ca.pem
 
-cfssl print-defaults config > ca-config.json
+现在为网站生成证书
+[root@k8s-master https]# cfssl print-defaults csr > server-csr.json
 
-cfssl gencert --initca ca-csr.json | cfssljson -bare ca -
-
-cfssl print-defaults csr > server-csr.json
-
-cat << EOF > server-csr.json
+[root@k8s-master https]# vim server-csr.json
 
 {
     "CN": "www.aliangedu.com",
@@ -45,14 +56,35 @@ cat << EOF > server-csr.json
         }
     ]
 }
-EOF
 
+[root@k8s-master https]# cfssl gencert -ca=ca.pem -ca-key=ca-key.pem --config=ca-config.json --profile=www server-csr.json | cfssljson -bare server
+2018/09/26 23:32:33 [INFO] generate received request
+2018/09/26 23:32:33 [INFO] received CSR
+2018/09/26 23:32:33 [INFO] generating key: rsa-2048
+2018/09/26 23:32:33 [INFO] encoded CSR
+2018/09/26 23:32:33 [INFO] signed certificate with serial number 17604984520277629664038013271063167532279901423
+2018/09/26 23:32:33 [WARNING] This certificate lacks a "hosts" field. This makes it unsuitable for
+websites. For more information see the Baseline Requirements for the Issuance and Management
+of Publicly-Trusted Certificates, v.1.1.6, from the CA/Browser Forum (https://cabforum.org);
+specifically, section 10.2.3 ("Information Requirements").
 
-cfssl gencert -ca=ca.pem -ca-key=ca-key.pem --config=ca-config.json --profile=www server-csr.json | cfssljson -bare server
+[root@k8s-master https]# ls
+ca-config.json  ca.csr  ca-csr.json  ca-key.pem  ca.pem  server.csr  server-csr.json  server-key.pem  server.pem
 
- kubectl create secret tls aliangedu-https --key server-key.pem --cert server.pem
+用server-key.pem  server.pem就可以做https了
 
+步骤：
+1、将上面两个文件导入集群管理中
+[root@k8s-master https]# kubectl create secret tls aliangedu-https --key server-key.pem --cert server.pem
+secret "aliangedu-https" created
 
+[root@k8s-master https]# kubectl get secret
+NAME                  TYPE                                  DATA      AGE
+aliangedu-https       kubernetes.io/tls                     2         45s
+
+2、如何使用
+
+[root@k8s-master https]# cd ../ingress/
 
 cat << EOF> https.yaml
 apiVersion: extensions/v1beta1
@@ -73,12 +105,8 @@ spec:
           servicePort: 80
 EOF
 
- kubectl create -f https.yaml
-
-
-
-
-
+[root@k8s-master ingress]# kubectl create -f https.yaml
+ingress "https-test" created
 
  
 [root@k8s-master ingress]# kubectl get ing
