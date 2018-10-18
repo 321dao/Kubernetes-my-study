@@ -1,0 +1,22 @@
+
+cat << EOF > http.yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: httpd-test
+spec:
+  rules:
+  - host: foo.bar.com
+    http:
+      paths:
+      - backend:
+          serviceName: httpd
+          servicePort: 80
+  - host: bar.baz.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx
+          servicePort: 80
+EOF
+
