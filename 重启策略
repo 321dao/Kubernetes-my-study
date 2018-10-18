@@ -1,0 +1,16 @@
+
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  restartPolicy: OnFailure
+  
+  
+  
+三种重启策略：
+Always：当容器停止，总是重建容器，默认策略。
+OnFailure：当容器异常退出（退出状态码非0）时，才重启容器。 一般调整为这个
+Never：当容器终止退出，从不重启容器
+
+
+
