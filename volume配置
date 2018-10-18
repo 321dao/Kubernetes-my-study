@@ -21,5 +21,26 @@ EOF
 
 
 
+ hostPath 模式
+
+cat <<EOF> hostpath.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+  - image: nginx
+    name: test-container
+    volumeMounts:
+    - mountPath: /tmp-test
+      name: test-volume
+  volumes:
+  - name: test-volume
+    hostPath:
+      path: /tmp
+      type: Directory
+EOF
+
 
 
