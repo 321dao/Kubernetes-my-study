@@ -1,5 +1,10 @@
 emptyDir模式
 
+cat << EOF> edir.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-pod
 spec:
   containers:
   - image: redis
@@ -11,6 +16,9 @@ spec:
   - name: cache-volume
     emptyDir: {}
 EOF
+
+
+
 
 
 
