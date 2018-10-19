@@ -1,0 +1,170 @@
+
+Volume – nfs  k8s持久化存储,  注意:在k8s的每个节点,都要安装个nfs客户端:
+yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+
+
+搭建两台nfs服务器
+安装步骤参考：Centos7安装配置NFS服务和挂载
+Centos7安装配置NFS服务和挂载
+
+现在有3台服务器 s1(主)，s2(从), s3（从）需要实现文件实时同步，我们可以安装Nfs服务端和客户端来实现！
+
+一、安装 NFS 服务器所需的软件包：( ip: 192.168.224.143 )
+yum install -y nfs-utils
+
+mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+
+
+二、编辑exports文件，添加从机
+
+cat <<  EOF > /etc/exports
+/opt/nfs/data 192.168.224.0/24(rw,no_root_squash)
+EOF
+
+同192.168.224.0/24一个网络号的主机可以挂载NFS服务器上的/home/nfs/目录到自己的文件系统中
+rw表示可读写；sync表示同步写，fsid=0表示将/data找个目录包装成根目录
+
+三、启动nfs服务
+先为rpcbind和nfs做开机启动：(必须先启动rpcbind服务) 然后分别启动rpcbind和nfs服务：确认NFS服务器启动成功：检查 NFS 服务器是否挂载我们想共享的目录 /home/nfs/：#使配置生效
+
+
+systemctl enable rpcbind.service
+systemctl enable nfs-server.service
+systemctl start rpcbind.service
+systemctl start nfs-server.service
+rpcinfo -p
+exportfs -r
+exportfs
+
+
+#可以查看到已经ok
+/opt/nfs/data 192.168.224.0/24
+ 
+四、在从机上安装NFS 客户端 (三台node都要装上)
+
+首先是安裝nfs，同上，然后启动rpcbind服务，先为rpcbind做开机启动：然后启动rpcbind服务：
+
+yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+
+mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+echo Nfs > index.html
+
+
+
+注意：客户端不需要启动nfs服务
+
+检查 NFS 服务器端是否有目录共享：showmount -e nfs服务器的IP
+
+showmount -e 192.168.224.143
+
+Export list for 192.168.224.143:
+/home/nfs 192.168.224.0/24
+
+在从机上使用 mount 挂载服务器端的目录/home/nfs到客户端某个目录下：
+
+mkdir -p /opt/nfs/data
+mount -t nfs 192.168.224.143:/opt/nfs/data  /opt/nfs/data
+
+df -h 查看是否挂载成功。
+
+df -h
+
+
+
+在Master01 上
+[root@Master01 ~]# mkdir volume && cd volume
+
+
+cat << EOF > nginx-deployment.yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: wwwroot
+          mountPath: /usr/share/nginx/html
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: wwwroot
+        nfs:
+          server: 192.168.224.143
+          path: /opt/nfs/data
+EOF
+
+
+
+[root@Master01 volume]# kubectl create -f nginx-deployment.yaml
+deployment "nginx-deployment" created
+
+
+[root@Master01 volume]# kubectl get po
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-78f5976cb9-l7l66   1/1       Running   0          7m
+nginx-deployment-78f5976cb9-t7mj2   1/1       Running   0          7m
+nginx-deployment-78f5976cb9-xv6np   1/1       Running   0          7m
+
+
+
+cat  << EOF >  nginx-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+ # type: NodePort
+EOF
+
+[root@Master01 volume]# kubectl create -f nginx-service.yaml
+service "nginx-service" created
+
+[root@Master01 nginx]# kubectl get po -o wide
+NAME                                READY     STATUS    RESTARTS   AGE       IP            NODE
+nginx-deployment-78f5976cb9-l7l66   1/1       Running   0          14m       172.30.11.6   192.168.224.184
+nginx-deployment-78f5976cb9-t7mj2   1/1       Running   0          14m       172.30.20.3   192.168.224.185
+nginx-deployment-78f5976cb9-xv6np   1/1       Running   0          14m       172.30.20.4   192.168.224.185
+
+
+[root@Master01 nginx]# kubectl get ep
+NAME            ENDPOINTS                                                  AGE
+nginx-service   172.30.11.6:80,172.30.20.3:80,172.30.20.4:80   5d
+
+[root@Master01 nginx]# kubectl  get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+nginx-service   NodePort    10.254.249.67    <none>        80:29575/TCP   5d
+
+在任意Node节点上访问
+[root@Node01 ~]# curl 172.30.11.6
+Nfs 
+ 
+
+[root@Node01 ~]# curl 10.254.249.67
+Nfsl
+ 
+
+在Node03 ip为192.168.224.185的节点查看挂载
+[root@Node03 ~]# df -h
+文件系统                   容量  已用  可用 已用% 挂载点
+192.168.224.143:/home/nfs   17G  4.7G   13G   28% /var/lib/kubelet/pods/b5bcddea-c231-11e8-ba16-000c29546295/volumes/kubernetes.io~nfs/wwwroot
+
+在Node02 ip为192.168.224.184的节点查看挂载
+192.168.224.143:/home/nfs   17G  4.7G   13G   28% /var/lib/kubelet/pods/b5c4a8a0-c231-11e8-ba16-000c29546295/volumes/kubernetes.io~nfs/wwwroot
+
+node1因为没有发布到该节点，所以是没有挂载的。
