@@ -1,0 +1,299 @@
+PersistentVolumes
+PersistentVolume（PV，持久卷）：对存储抽象实现，使得存储作为集群中的资源。
+PersistentVolumeClaim（PVC，持久卷申请）：PVC消费PV的资源。
+Pod申请PVC作为卷来使用，集群通过PVC查找绑定的PV，并Mount给Pod。
+
+PersistentVolumes - PV
+PV 类型：
+ GCEPersistentDisk
+ AWSElasticBlockStore
+ AzureFile
+ AzureDisk
+ FC (Fibre Channel)
+ FlexVolume
+ Flocker
+ NFS
+ iSCSI
+ RBD (Ceph Block Device)
+ CephFS
+ Cinder (OpenStack block storage)
+ Glusterfs
+ VsphereVolume
+ Quobyte Volumes
+ HostPath
+ VMware Photon
+ Portworx Volumes
+ ScaleIO Volumes
+ StorageOS
+
+上一节使用nfs和glusterfs需要在yaml文件中指定路径，对比一下以下这个yaml文件。
+
+[root@Master01 volume]# cd .. && mkdir pv && mkdir nfs-pv && cd  nfs-pv
+
+cat << EOF > nfs-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle
+  nfs:
+    path: /opt/nfs/data
+    server: 192.168.224.143
+EOF
+
+
+cat << EOF > pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc001
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+EOF
+
+
+cat << EOF > pvc-app.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+      volumeMounts:
+      - mountPath: "/usr/share/nginx/html"
+        name: wwwroot
+  volumes:
+    - name: wwwroot
+      persistentVolumeClaim:
+        claimName: pvc001
+EOF
+
+
+
+配置说明：
+accessModes ： 访问模式有以下三种
+ ReadWriteOnce 读写只挂载到一个节点上
+ ReadOnlyMany 只读挂载到所有节点上
+ ReadWriteMany  读写挂载到所有节点上
+
+persistentVolumeReclaimPolicy pv回收策略
+Recycling  Policy ：
+ Retain  默认的，不用了，保留着，需要管理员手动删除
+ Recycle 自动回收，自动删除数据
+ Delete
+
+删除之前测试
+[root@Master01 pv]# kubectl delete pv/nfs-pv
+persistentvolume "nfs-pv" deleted
+
+
+[root@Master01 pv]#  kubectl create -f nfs-pv.yaml
+persistentvolume "nfs-pv" created
+
+[root@Master01 pv]# kubectl get pv,pvc
+NAME        CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM     STORAGECLASS   REASON    AGE
+pv/nfs-pv   5Gi        RWX            Recycle          Available                                      1m
+
+Phase ：  状态说明
+ Available 可用，成功挂载
+ Bound 已被挂载，不能被别的再挂载了
+ Released 不再使用，需要手动删除
+ Failed 创建失败了
+到目前还不能使用pv，还需要pvc去消费pv
+
+pvc是统一的，不用考虑后端是nfs还是glusterfs
+
+绑定原理：
+申请的容量，这里申请的是5G，它会优先匹配到上面创建nfs-pv创建的那5G上，如果这里申请的是4G，它也会就近匹配，其他的10G，20G不会被匹配到。
+访问模式：pvc的模式ReadWriteMany 和pv创建时的模式一致
+
+[root@Master01 pv]# kubectl create -f pvc.yaml
+persistentvolumeclaim "pvc001" created
+
+[root@Master01 pv]# kubectl get pv,pvc
+NAME        CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS    CLAIM            STORAGECLASS   REASON    AGE
+pv/nfs-pv   5Gi        RWX            Recycle          Bound     default/pvc001                            50m
+
+NAME         STATUS    VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     nfs-pv    5Gi        RWX                           24s
+
+Bound ：状态变成了绑定的了，两者已经关联上了
+
+下面创建应用，使用pvc
+ [root@Master01 pv]# kubectl create -f pvc-app.yaml
+pod "mypod" created
+
+[root@Master01 pv]# kubectl get pod -o wide
+NAME                               READY     STATUS    RESTARTS   AGE       IP            NODE
+mypod                              1/1       Running   0          2m        172.30.20.5   192.168.224.185
+
+
+进入192.168.224.143那台NFS服务器修改主页
+[root@node1 data]# ip a | grep 192
+    inet 192.168.224.143/24 brd 192.168.224.255 scope global ens33
+ [root@node1 data]# echo Nfs > /opt/nfs/data/index.html
+
+回到k8s任一台服务器测试
+[root@Node01 ~]# curl 172.30.20.5
+Nfs
+
+ 如果出现cerl不通的话,请检查flanneld,重启.
+测试删除pvc，看原来的存储数据还在不在，现在用的策略是Recycle
+Recycle 自动回收，自动删除数据
+
+[root@Master01 pv]# kubectl get pv,pvc
+NAME            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS   REASON    AGE
+pv/nfs-pv       5Gi        RWX            Recycle          Bound       default/pvc001                            1h
+
+NAME         STATUS    VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     nfs-pv    5Gi        RWX                           1h
+
+删除应用
+[root@Master01 pv]# kubectl delete -f pvc-app.yaml
+pod "mypod" deleted
+
+[root@Master01 pv]# kubectl delete pvc/pvc001
+persistentvolumeclaim "pvc001" deleted
+
+[root@Master01 pv]# kubectl get pv,pvc
+NAME            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM     STORAGECLASS   REASON    AGE
+pv/nfs-pv       5Gi        RWX            Recycle          Available                                      2h
+
+去看看数据还在不在
+[root@k8s-node-1 data]# ip a | grep 192
+    inet 192.168.224.143/24 brd 192.168.224.255 scope global ens33
+[root@k8s-node-1 data]# ls
+空的，发现数据已经被删除
+
+
+回到master主节点创建glusterfs的pv
+
+[root@Master01 nfs-pv]#    cd ../ && mkdir gluster-pv && cd gluster-pv
+
+cat << EOF > gluster-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gluster-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  glusterfs:
+    endpoints: "glusterfs-cluster"
+    path: "gv0"
+    readOnly: false
+EOF
+
+[root@Master01 pv]# kubectl create -f gluster-pv.yaml
+persistentvolume "gluster-pv" created
+
+[root@Master01 pv]# kubectl get pv,pvc
+NAME            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS   REASON    AGE
+pv/gluster-pv   10Gi       RWX            Retain           Available                                             29s
+pv/nfs-pv       5Gi        RWX            Recycle          Bound       default/pvc001                            1h
+
+NAME         STATUS    VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     nfs-pv    5Gi        RWX                           1h
+
+
+再创建一个pv
+cat << EOF >  gluster-pv2.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gluster-pv02
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  glusterfs:
+    endpoints: "glusterfs-cluster"
+    path: "gv0"
+    readOnly: false
+EOF
+
+发布应用，综合一个新的配置
+
+cat << EOF > pvc-app.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc001
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 11Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+      volumeMounts:
+      - mountPath: "/usr/share/nginx/html"
+        name: wwwroot
+  volumes:
+    - name: wwwroot
+      persistentVolumeClaim:
+        claimName: pvc001
+EOF
+
+[root@Master01 gluster-pv]# kubectl create -f pvc-app.yaml
+persistentvolumeclaim "pvc001" created
+pod "mypod" created
+
+
+[root@Master01 gluster-pv]# kubectl get pv,pvc
+NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS  REASON    AGE
+pv/gluster-pv00   5Gi        RWX            Retain           Available            6m
+pv/gluster-pv02   20Gi       RWX            Retain           Bound       default/pvc001            16m
+
+NAME         STATUS    VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     gluster-pv02   20Gi       RWX                           24s
+
+发现绑定到了20G那个挂载，一般都是往大的容量去绑定
+
+
+[root@Master01 gluster-pv]# kubectl  get po -o wide
+NAME      READY     STATUS    RESTARTS   AGE       IP            NODE
+mypod     1/1       Running   0          3m        172.30.20.3   192.168.224.185
+
+[root@Node02 ~]# curl 172.30.20.3
+Gluster From Glusterfs-pv-pvc
+
+应用使用pv，pv是实际的存储，pvc是申请绑定到那个pv上
+有状态的部署肯定要用到的，保持数据持久化，保持多节点数据统一
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
