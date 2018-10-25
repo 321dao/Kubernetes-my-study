@@ -1,0 +1,375 @@
+Job 和 Cronjob 的使用
+上节课我们学习了Pod自动伸缩的方法，我们使用到了HPA这个资源对象，我们在后面的课程中还会和大家接触到HPA的。今天我们来给大家介绍另外一类资源对象：Job，我们在日常的工作中经常都会遇到一些需要进行批量数据处理和分析的需求，当然也会有按时间来进行调度的工作，在我们的Kubernetes集群中为我们提供了Job和CronJob两种资源对象来应对我们的这种需求。
+
+Job负责处理任务，即仅执行一次的任务，它保证批处理任务的一个或多个Pod成功结束。而CronJob则就是在Job上加上了时间调度。
+
+Job
+我们用Job这个资源对象来创建一个任务，我们定一个Job来执行一个倒计时的任务，定义YAML文件：
+
+
+cat << EOF > job-demo.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-demo
+spec:
+  template:
+    metadata:
+      name: job-demo
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: counter
+        image: busybox
+        command:
+        - "bin/sh"
+        - "-c"
+        - "for i in 9 8 7 6 5 4 3 2 1; do echo \$i; done"
+EOF
+
+
+
+
+注意Job的RestartPolicy仅支持Never和OnFailure两种，不支持Always，我们知道Job就相当于来执行一个批处理任务，执行完就结束了，如果支持Always的话是不是就陷入了死循环了.
+
+然后来创建该Job，保存为job-demo.yaml：
+[root@Master ~]# kubectl  create -f job-demo.yaml
+job.batch "job-demo" created
+
+
+然后我们可以查看当前的Job资源对象：
+[root@Master ~]#  kubectl get jobs
+NAME       DESIRED   SUCCESSFUL   AGE
+job-demo   1         1            5m
+
+
+[root@Master ~]# kubectl get po
+NAME                              READY     STATUS      RESTARTS   AGE
+job-demo-sljbp                    0/1       Completed   0          6m
+
+
+描述信息
+
+[root@Master ~]# kubectl describe jobs job-demo
+Name:           job-demo
+Namespace:      default
+Selector:       controller-uid=167cc759-d82b-11e8-8383-000c291d813e
+Labels:         controller-uid=167cc759-d82b-11e8-8383-000c291d813e
+                job-name=job-demo
+Annotations:    <none>
+Parallelism:    1
+Completions:    1
+Start Time:     Thu, 25 Oct 2018 15:53:40 +0800
+Pods Statuses:  0 Running / 1 Succeeded / 0 Failed
+Pod Template:
+  Labels:  controller-uid=167cc759-d82b-11e8-8383-000c291d813e
+           job-name=job-demo
+  Containers:
+   counter:
+    Image:      busybox
+    Port:       <none>
+    Host Port:  <none>
+    Command:
+      bin/sh
+      -c
+      for i in 9 8 7 6 5 4 3 2 1; do echo ; done
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Events:
+  Type    Reason            Age   From            Message
+  ----    ------            ----  ----            -------
+  Normal  SuccessfulCreate  7m    job-controller  Created pod: job-demo-sljbp
+
+
+
+查看日志
+
+[root@Master ~]# kubectl  logs job-demo-9f4ms
+9
+8
+7
+6
+5
+4
+3
+2
+1
+
+
+
+
+
+
+CronJob
+CronJob其实就是在Job的基础上加上了时间调度，我们可以：在给定的时间点运行一个任务，也可以周期性地在给定时间点运行。这个实际上和我们Linux中的crontab就非常类似了。
+
+一个CronJob对象其实就对应中crontab文件中的一行，它根据配置的时间格式周期性地运行一个Job，格式和crontab也是一样的。
+
+crontab的格式如下：
+
+分 时 日 月 星期 要运行的命令 第1列分钟0～59 第2列小时0～23） 第3列日1～31 第4列月1～12 第5列星期0～7（0和7表示星期天） 第6列要运行的命令
+
+现在，我们用CronJob来管理我们上面的Job任务，
+
+
+
+cat << EOF > crontab-demo.yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: cronjob-demo
+spec:
+  successfulJobsHistoryLimit: 10
+  failedJobsHistoryLimit: 10
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: hello
+            image: busybox
+            args:
+            - "bin/sh"
+            - "-c"
+            - "for i in 9 8 7 6 5 4 3 2 1; do echo \$i; done"
+EOF
+
+
+
+
+我们这里的Kind是CronJob了，要注意的是.spec.schedule字段是必须填写的，用来指定任务运行的周期，格式就和crontab一样，另外一个字段是.spec.jobTemplate, 用来指定需要运行的任务，格式当然和Job是一致的。还有一些值得我们关注的字段.spec.successfulJobsHistoryLimit和.spec.failedJobsHistoryLimit，表示历史限制，是可选的字段。它们指定了可以保留多少完成和失败的Job，默认没有限制，所有成功和失败的Job都会被保留。然而，当运行一个Cron Job时，Job可以很快就堆积很多，所以一般推荐设置这两个字段的值。如果设置限制的值为 0，那么相关类型的Job完成后将不会被保留。
+
+接下来我们来创建这个cronjob
+[root@Master ~]# kubectl  create -f crontab-demo.yaml
+cronjob.batch "cronjob-demo" created
+
+
+当然，也可以用kubectl run来创建一个CronJob：
+kubectl run hello --schedule="*/1 * * * *" --restart=OnFailure --image=busybox -- /bin/sh -c "date; echo Hello from the Kubernetes cluster"
+
+
+[root@Master ~]# kubectl  get cronjob
+NAME           SCHEDULE      SUSPEND   ACTIVE    LAST SCHEDULE   AGE
+cronjob-demo   */1 * * * *   False     0         1m              3m
+
+
+
+[root@Master ~]# kubectl get jobs
+NAME                      DESIRED   SUCCESSFUL   AGE
+cronjob-demo-1540455720   1         1            3m
+cronjob-demo-1540455780   1         1            2m
+cronjob-demo-1540455840   1         1            1m
+cronjob-demo-1540455900   1         0            2s
+
+
+
+
+[root@Master ~]# kubectl  get po
+NAME                              READY     STATUS      RESTARTS   AGE
+cronjob-demo-1540455780-kvvxf     0/1       Completed   0          2m
+cronjob-demo-1540455840-sb6r8     0/1       Completed   0          1m
+cronjob-demo-1540455900-ntt5x     0/1       Completed   0          57s
+
+
+
+
+
+
+[root@Master ~]# kubectl  logs cronjob-demo-1540455960-wbmnp
+9
+8
+7
+6
+5
+4
+3
+2
+1
+
+
+
+删除
+[root@Master ~]# kubectl  delete cronjob cronjob-demo
+cronjob.batch "cronjob-demo" deleted
+
+
+
+[root@Master ~]# kubectl  get jobs
+NAME       DESIRED   SUCCESSFUL   AGE
+
+
+
+
+$ pods=$(kubectl get pods --selector=job-name=hello-1202039034 --output=jsonpath={.items..metadata.name} -a)
+
+$ kubectl logs $pods
+Mon Aug 29 21:34:09 UTC 2016
+Hello from the Kubernetes cluster
+
+$ kubectl delete cronjob hello
+cronjob "hello" deleted
+
+一旦不再需要 Cron Job，简单地可以使用 kubectl 命令删除它：
+
+$ kubectl delete cronjob hello
+cronjob "hello" deleted
+
+这将会终止正在创建的 Job。然而，运行中的 Job 将不会被终止，不会删除 Job 或 它们的 Pod。为了清理那些 Job 和 Pod，需要列出该 Cron Job 创建的全部 Job，然后删除它们：
+
+$ kubectl get jobs
+NAME               DESIRED   SUCCESSFUL   AGE
+hello-1201907962   1         1            11m
+hello-1202039034   1         1            8m
+...
+
+$ kubectl delete jobs hello-1201907962 hello-1202039034 ...
+job "hello-1201907962" deleted
+job "hello-1202039034" deleted
+...
+
+一旦 Job 被删除，由 Job 创建的 Pod 也会被删除。注意，所有由名称为 “hello” 的 Cron Job 创建的 Job 会以前缀字符串 “hello-” 进行命名。如果想要删除当前 Namespace 中的所有 Job，可以通过命令 kubectl delete jobs --all 立刻删除它们。
+
+
+
+
+
+华为云资料
+
+
+kubernetes之Cronjob定时任务
+
+     Cronjob从名字上可以看到，它就是一个计划任务，与Linux中的crontab无异，其格式基本上都crontab一样，
+
+     其格式如下： 
+
+  Minutes Hours DayofMonth Month DayofWeek Yea
+     支持 ", - * / "四个字符，
+
+          *：表示匹配任意值，如果在Minutes 中使用，表示每分钟
+
+          /： 表示起始时间开始触发，然后每隔固定时间触发一次，
+
+           例如在Minutes 设置的是5/20，则表示第一次触发是在第5min时，接下来每20min触发一次，
+
+                                    即，第25min，45min等时刻触发
+
+
+
+示例：比如每隔1min执行一次任务：则Cron 表达式如下：
+
+  */1 * * * *
+
+
+现在编写一个Cronjob资源对象来执行job：    
+
+Cronjob 在Kubernetes1.8版本之前使用的API版本是batch/v2alpha1, 需要在API Server启动时启用此功能：
+
+    --runtime-config=batch/v2alpha1=true
+在版本>1.8后，API版本已转为batch/v1beta1，并且默认启用。
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+ name: hello #Cronjob的名称
+spec:
+  schedule: "*/1 * * * *"   #job执行的周期，cron格式的字符串
+ jobTemplate:  #job模板
+   spec:   
+    template:
+    spec:
+     containers:
+     - name: hello-cronjob
+      image: 10.3.1.15:5000/ubuntu:16.04
+      command: ["bash","-c","date;echo  Hello from the Kubernetes cluste"] #job具体执行的任务
+      restartPolicy: OnFailure
+
+      
+创建并查看任务状态：
+
+root@ubuntu15:# kubectl get cronjob 
+NAME      SCHEDULE      SUSPEND   ACTIVE    LAST SCHEDULE   AGE
+hello     */1 * * * *     False     0         <none>
+
+#刚创建还没有活跃的工作，也没有计划任何工作
+然后，每隔一分钟执行kubectl get cronjob hello 查看任务状态，发现的确是每分钟调度了一次。
+
+root@ubuntu# kubectl get cronjob hello  
+NAME        SCHEDULE      SUSPEND   ACTIVE         LAST SCHEDULE   AGE
+hello     */1 * * * *       False     1         Thu, 01 Feb 2018 06:22:00 +0000
+
+root@ubuntu15:/data/yaml# kubectl get cronjob hello
+NAME      SCHEDULE      SUSPEND   ACTIVE       LAST SCHEDULE   AGE
+hello     */1 * * * *   False       0         Thu, 01 Feb 2018 06:22:00 +0000
+
+#可以看到在指定的时间内已成功执行了一个job，在LAST-SCHEDULE，目前有0个活动作业，意味着作业已完成或失败。
+
+
+通过在Node查找Cronjob对应的容器，可以看到每隔一分钟产生一个容器，执行完后就会正常退出，而不会再重启容器。
+
+root@ubuntu:/# docker ps -a |grep hello-cronjob
+94f0e79db981   10.3.1.15:5000/ubuntu  "bash -c 'date;ech..."  11 seconds ago    Exited (0) 11 seconds ago        k8s_hello-cronjob_hello-15174...
+3d79b4e4a8f0   10.3.1.15:5000/ubuntu  "bash -c 'date;ech..."  About a minute ago Exited (0) About a minute ago      k8s_hello-cronjob_hello-15176...
+f5d99c855c77   10.3.1.15:5000/ubuntu  "bash -c 'date;ech..."  2 minutes ago     Exited (0) 2 minutes ago         k8s_hello-cronjob_hello-15174...
+0fd8f23cb624   10.3.1.15:5000/ubuntu  "bash -c 'date;ech..."  3 minutes ago     Exited (0) 3 minutes ago         k8s_hello-cronjob_hello-15174...
+查看任意容器的日志：  
+
+root@ubuntu:/# docker logs 96f93b1dbf53
+Thu Feb  1 06:08:19 UTC 2018
+Hello from the Kubernetes cluste
+
+root@ubuntu:/# docker logs 2271a37d07b4
+Thu Feb  1 06:07:19 UTC 2018
+Hello from the Kubernetes cluste
+
+#两个相临的时间的容器刚好是一分钟执行一次命令。
+
+
+如上每一次执行一次任务就会产生一个容器，且任务执行完成后就会正常退出容器，根据在定义contains
+
+重启策略为 OnFailure所以不会再重启容器，下次执行任务的时间到了就会再启动一个容器来执行，
+
+这样就会不会造成很多Exited的容器，但是Kubernetes
+
+不会让它出现这样的情况的，在CronJob中有个字段来限制历史作业的个数：
+
+.spec.successfulJobsHistoryLimit： #成功完成的作业保存多少个，默认为3
+.spec.failedJobsHistoryLimit：   #失败的作业保存多少个，默认为1
+     
+ # 设置为0则不会保存。这两个字段与jobTemplate同级.
+
+
+使用如下命令可更加直观的实时看到每次Cron Job定期触发任务执行的历史和现状情况：
+
+root@ubuntu:/# kubectl get job --watch
+   NAME                 DESIRED   SUCCESSFUL   AGE
+hello-1517466900      1               1            2m
+hello-1517466960      1               1            1m
+hello-1517467500      1               1            46s
+
+其中，NAME为CronJob的名称，每一次执行任务都会启动一个Pod
+   SUCCESSFUL 列为1，表示任务执行成功。
+
+
+ 找出由CronJob资源对象创建出来的Pod： 可以通过上面的CronJob NAME：
+
+root@ubuntu:/# kubectl get pods --show-all -o wide |grep hello-1517467500
+hello-1517467500-brhlx        0/1       Completed   0          56s       <none>      10.3.1.16
+找到对应的Pod后，查看它的日志：
+
+root@ubuntu:/# kubectl logs hello-1517467980-q9dvk
+Thu Feb  1 06:33:13 UTC 2018
+Hello from the Kubernetes cluste
+
+#正是前面设置的命令输出结果
+  
+
+  如果不需要这个CronJob，删除之：
+
+root@ubuntu:/# kubectl delete cronjob hello
+   
+
+  Cronjob就是这么简单。
+
