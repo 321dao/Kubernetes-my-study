@@ -1,0 +1,28 @@
+
+cat << EOF > deploy-demo.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  labels:
+    k8s-app: nginx-demo
+spec:
+  replicas: 3
+  revisionHistoryLimit: 15
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+EOF
