@@ -1,0 +1,4 @@
+
+$ kubectl run -i --tty load-generator --image=busybox /bin/sh
+ 
+/ # while true; do wget -q -O- http://172.16.255.60; done
