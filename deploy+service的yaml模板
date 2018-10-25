@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx-demo
     spec:
       containers:
       - name: nginx
@@ -32,7 +32,7 @@ metadata:
   name: myservice
 spec:
   selector:
-    app: myapp
+    app: nginx-demo
   ports:
   - protocol: TCP
     port: 80
