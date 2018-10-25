@@ -46,7 +46,7 @@ spec:
     apiVersion: extensions/v1beta1
     kind: Deployment
     name: hpa-demo
-  targetCPUUtilizationPercentage: 5
+  targetCPUUtilizationPercentage: 90
 EOF
 
 
