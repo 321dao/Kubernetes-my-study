@@ -285,6 +285,27 @@ Gluster From Glusterfs-pv-pvc
 
 
 
+阳明模板
+
+
+cat << EOF > pv001.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv001
+  labels:
+    release: stable
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  hostPath:
+    path: /tmp/data
+EOF
+
+
 
 
 
