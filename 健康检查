@@ -21,6 +21,21 @@ Probe 支持以下三种检查方法：
  tcpSocket
 发起TCP Socket建立成功。
 
+示例：
+
+livenessProbe: 存活性探针
+  tcpSocket:
+    port: 80
+  initialDelaySeconds: 10  初始化10秒后开始检测
+  periodSeconds: 3  每隔3秒检测一次
+readinessProbe:  可读性探针
+  tcpSocket:
+    port: 80
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+
+
  
 上节课我们和大家一起学习了Pod中容器的生命周期的两个钩子函数，PostStart与PreStop，其中PostStart是在容器创建后立即执行的，而PreStop这个钩子函数则是在容器终止之前执行的。除了上面这两个钩子函数以外，还有一项配置会影响到容器的生命周期的，那就是健康检查的探针。
 
