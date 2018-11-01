@@ -1,3 +1,18 @@
+更新策略
+
+
+replicas: 2
+revisionHistoryLimit: 10
+minReadySeconds: 5
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 1
+
+
+
+
 没加资源限制
 
 cat << EOF > deploy-demo.yaml
