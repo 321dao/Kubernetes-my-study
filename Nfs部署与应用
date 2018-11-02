@@ -1,3 +1,134 @@
+=====================阳明 NFS搭建教程============================
+
+NFS
+我们这里为了演示方便，决定使用相对简单的 NFS 这种存储资源，接下来我们在节点10.151.30.57上来安装 NFS 服务，数据目录：/data/k8s/
+
+关闭防火墙 安装配置 nfs  共享目录设置权限： 配置 nfs，nfs 的默认配置文件在 /etc/exports 文件下，在该文件中添加下面的配置信息：
+
+
+systemctl daemon-reload
+systemctl stop firewalld.service
+systemctl disable firewalld.service
+yum -y install nfs-utils rpcbind
+
+chmod 755 /data/k8s/
+cat << EOF >> /etc/exports
+/data/k8s  *(rw,sync,no_root_squash)
+EOF
+
+
+
+
+
+配置说明：
+
+/data/k8s：是共享的数据目录
+*：表示任何人都有权限连接，当然也可以是一个网段，一个 IP，也可以是域名
+rw：读写的权限
+sync：表示文件同时写入硬盘和内存
+no_root_squash：当登录 NFS 主机使用共享目录的使用者是 root 时，其权限将被转换成为匿名使用者，通常它的 UID 与 GID，都会变成 nobody 身份
+当然 nfs 的配置还有很多，感兴趣的同学可以在网上去查找一下。
+
+启动服务 nfs 需要向 rpc 注册，rpc 一旦重启了，注册的文件都会丢失，向他注册的服务都需要重启
+注意启动顺序，先启动 rpcbind,然后启动 nfs 服务：
+
+systemctl start rpcbind.service && systemctl enable rpcbind && systemctl status rpcbind
+ systemctl start nfs.service && systemctl enable nfs &&  systemctl status nfs
+
+
+● rpcbind.service - RPC bind service
+   Loaded: loaded (/usr/lib/systemd/system/rpcbind.service; disabled; vendor preset: enabled)
+   Active: active (running) since Tue 2018-07-10 20:57:29 CST; 1min 54s ago
+  Process: 17696 ExecStart=/sbin/rpcbind -w $RPCBIND_ARGS (code=exited, status=0/SUCCESS)
+ Main PID: 17697 (rpcbind)
+    Tasks: 1
+   Memory: 1.1M
+   CGroup: /system.slice/rpcbind.service
+           └─17697 /sbin/rpcbind -w
+
+Jul 10 20:57:29 master systemd[1]: Starting RPC bind service...
+Jul 10 20:57:29 master systemd[1]: Started RPC bind service.
+看到上面的 Started 证明启动成功了。
+
+
+
+● nfs-server.service - NFS server and services
+   Loaded: loaded (/usr/lib/systemd/system/nfs-server.service; enabled; vendor preset: disabled)
+  Drop-In: /run/systemd/generator/nfs-server.service.d
+           └─order-with-mounts.conf
+   Active: active (exited) since Tue 2018-07-10 21:35:37 CST; 14s ago
+ Main PID: 32067 (code=exited, status=0/SUCCESS)
+   CGroup: /system.slice/nfs-server.service
+
+Jul 10 21:35:37 master systemd[1]: Starting NFS server and services...
+Jul 10 21:35:37 master systemd[1]: Started NFS server and services.
+同样看到 Started 则证明 NFS Server 启动成功了。
+
+另外我们还可以通过下面的命令确认下：
+
+$ rpcinfo -p|grep nfs
+    100003    3   tcp   2049  nfs
+    100003    4   tcp   2049  nfs
+    100227    3   tcp   2049  nfs_acl
+    100003    3   udp   2049  nfs
+    100003    4   udp   2049  nfs
+    100227    3   udp   2049  nfs_acl
+
+
+查看具体目录挂载权限：
+
+$ cat /var/lib/nfs/etab
+
+/data/k8s    *(rw,sync,wdelay,hide,nocrossmnt,secure,no_root_squash,no_all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=65534,anongid=65534,sec=sys,secure,no_root_squash,no_all_squash)
+
+
+客户端安装
+
+到这里我们就把 nfs server 给安装成功了，接下来我们在节点10.151.30.62上来安装 nfs 的客户端来验证下 nfs，安装完成后，和上面的方法一样，先启动 rpc、然后启动 nfs：
+
+
+systemctl daemon-reload
+systemctl stop firewalld.service
+systemctl disable firewalld.service
+yum -y install nfs-utils rpcbind
+systemctl start rpcbind.service && systemctl enable rpcbind && systemctl status rpcbind
+systemctl start nfs.service && systemctl enable nfs &&  systemctl status nfs
+
+
+
+挂载数据目录 客户端启动完成后，我们在客户端来挂载下 nfs 测试下：
+首先检查下 nfs 是否有共享目录：
+
+$ showmount -e 10.151.30.57
+Export list for 10.151.30.57:
+/data/k8s *
+
+
+然后我们在客户端上新建目录：
+$ mkdir -p /root/course/kubeadm/data
+
+
+将 nfs 共享目录挂载到上面的目录：
+$ mount -t nfs 10.151.30.57:/data/k8s /root/course/kubeadm/data
+
+
+挂载成功后，在客户端上面的目录中新建一个文件，然后我们观察下 nfs 服务端的共享目录下面是否也会出现该文件：
+$ touch /root/course/kubeadm/data/test.txt
+
+
+然后在 nfs 服务端查看：
+$ ls -ls /data/k8s/
+total 4
+4 -rw-r--r--. 1 root root 4 Jul 10 21:50 test.txt
+
+
+
+如果上面出现了 test.txt 的文件，那么证明我们的 nfs 挂载成功了。
+
+
+
+=====================李振良 教程============================
+
 
 Volume – nfs  k8s持久化存储,  注意:在k8s的每个节点,都要安装个nfs客户端:
 yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
