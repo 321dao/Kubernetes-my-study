@@ -1,0 +1,556 @@
+
+Volume – nfs  k8s持久化存储,  注意:在k8s的每个节点,都要安装个nfs客户端:
+yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+
+
+搭建两台nfs服务器
+安装步骤参考：Centos7安装配置NFS服务和挂载
+Centos7安装配置NFS服务和挂载
+
+现在有3台服务器 s1(主)，s2(从), s3（从）需要实现文件实时同步，我们可以安装Nfs服务端和客户端来实现！
+
+一、安装 NFS 服务器所需的软件包：( ip: 192.168.224.143 )
+yum install -y nfs-utils
+
+mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+
+
+二、编辑exports文件，添加从机
+
+cat <<  EOF > /etc/exports
+/opt/nfs/data 192.168.224.0/24(rw,no_root_squash)
+EOF
+
+同192.168.224.0/24一个网络号的主机可以挂载NFS服务器上的/home/nfs/目录到自己的文件系统中
+rw表示可读写；sync表示同步写，fsid=0表示将/data找个目录包装成根目录
+
+三、启动nfs服务
+先为rpcbind和nfs做开机启动：(必须先启动rpcbind服务) 然后分别启动rpcbind和nfs服务：确认NFS服务器启动成功：检查 NFS 服务器是否挂载我们想共享的目录 /home/nfs/：#使配置生效
+
+
+systemctl enable rpcbind.service
+systemctl enable nfs-server.service
+systemctl start rpcbind.service
+systemctl start nfs-server.service
+rpcinfo -p
+exportfs -r
+exportfs
+
+
+#可以查看到已经ok
+/opt/nfs/data 192.168.224.0/24
+ 
+四、在从机上安装NFS 客户端 (三台node都要装上)
+
+首先是安裝nfs，同上，然后启动rpcbind服务，先为rpcbind做开机启动：然后启动rpcbind服务：
+
+yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+
+mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+echo Nfs > index.html
+
+
+
+注意：客户端不需要启动nfs服务
+
+检查 NFS 服务器端是否有目录共享：showmount -e nfs服务器的IP
+
+showmount -e 192.168.224.143
+
+Export list for 192.168.224.143:
+/home/nfs 192.168.224.0/24
+
+在从机上使用 mount 挂载服务器端的目录/home/nfs到客户端某个目录下：
+
+mkdir -p /opt/nfs/data
+mount -t nfs 192.168.224.143:/opt/nfs/data  /opt/nfs/data
+
+df -h 查看是否挂载成功。
+
+df -h
+
+
+
+在Master01 上
+[root@Master01 ~]# mkdir volume && cd volume
+
+
+cat << EOF > nginx-deployment.yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: wwwroot
+          mountPath: /usr/share/nginx/html
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: wwwroot
+        nfs:
+          server: 192.168.224.143
+          path: /opt/nfs/data
+EOF
+
+
+
+[root@Master01 volume]# kubectl create -f nginx-deployment.yaml
+deployment "nginx-deployment" created
+
+
+[root@Master01 volume]# kubectl get po
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-78f5976cb9-l7l66   1/1       Running   0          7m
+nginx-deployment-78f5976cb9-t7mj2   1/1       Running   0          7m
+nginx-deployment-78f5976cb9-xv6np   1/1       Running   0          7m
+
+
+
+cat  << EOF >  nginx-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+ # type: NodePort
+EOF
+
+[root@Master01 volume]# kubectl create -f nginx-service.yaml
+service "nginx-service" created
+
+[root@Master01 nginx]# kubectl get po -o wide
+NAME                                READY     STATUS    RESTARTS   AGE       IP            NODE
+nginx-deployment-78f5976cb9-l7l66   1/1       Running   0          14m       172.30.11.6   192.168.224.184
+nginx-deployment-78f5976cb9-t7mj2   1/1       Running   0          14m       172.30.20.3   192.168.224.185
+nginx-deployment-78f5976cb9-xv6np   1/1       Running   0          14m       172.30.20.4   192.168.224.185
+
+
+[root@Master01 nginx]# kubectl get ep
+NAME            ENDPOINTS                                                  AGE
+nginx-service   172.30.11.6:80,172.30.20.3:80,172.30.20.4:80   5d
+
+[root@Master01 nginx]# kubectl  get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+nginx-service   NodePort    10.254.249.67    <none>        80:29575/TCP   5d
+
+在任意Node节点上访问
+[root@Node01 ~]# curl 172.30.11.6
+Nfs 
+ 
+
+[root@Node01 ~]# curl 10.254.249.67
+Nfsl
+ 
+
+在Node03 ip为192.168.224.185的节点查看挂载
+[root@Node03 ~]# df -h
+文件系统                   容量  已用  可用 已用% 挂载点
+192.168.224.143:/home/nfs   17G  4.7G   13G   28% /var/lib/kubelet/pods/b5bcddea-c231-11e8-ba16-000c29546295/volumes/kubernetes.io~nfs/wwwroot
+
+在Node02 ip为192.168.224.184的节点查看挂载
+192.168.224.143:/home/nfs   17G  4.7G   13G   28% /var/lib/kubelet/pods/b5c4a8a0-c231-11e8-ba16-000c29546295/volumes/kubernetes.io~nfs/wwwroot
+
+node1因为没有发布到该节点，所以是没有挂载的。
+
+
+付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付付
+
+Volume – glusterfs 主流的分布式存储集群，可以保证数据的可靠性，提高性能，大数据用到，要求性能高的，企业一般用这个
+任意一个节点坏了,还有另外一个顶着,所以影响不大
+GlusterFS部署：http://docs.gluster.org/en/latest/Quick-Start-Guide/Quickstart/
+https://github.com/kubernetes/kubernetes/tree/8fd414537b5143ab039cb910590237cabf4af783/examples/volumes/glusterfs
+# kubectl create -f glusterfs-endpoints.json
+# kubectl create -f glusterfs-service.json
+
+
+GlusterFS部署步骤
+两个节点组成集群
+要求系统有两个分区
+三个节点都创建一个新磁盘,/dev/sdb
+
+[root@maste ~]# fdisk /dev/sdb
+欢迎使用 fdisk (util-linux 2.23.2)。
+
+更改将停留在内存中，直到您决定将更改写入磁盘。
+使用写入命令前请三思。
+
+Device does not contain a recognized partition table
+使用磁盘标识符 0x18a85a8b 创建新的 DOS 磁盘标签。
+
+命令(输入 m 获取帮助)：n
+Partition type:
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended
+Select (default p): p
+分区号 (1-4，默认 1)：
+起始 扇区 (2048-4194303，默认为 2048)：
+将使用默认值 2048
+Last 扇区, +扇区 or +size{K,M,G} (2048-4194303，默认为 4194303)：
+将使用默认值 4194303
+分区 1 已设置为 Linux 类型，大小设为 2 GiB
+
+命令(输入 m 获取帮助)：w
+The partition table has been altered!
+
+Calling ioctl() to re-read partition table.
+正在同步磁盘。
+
+
+配置hosts
+# 有三台机器两台master一主一从，一个client，三台机器分别配置好/etc/hosts
+# glusterfs服务器节点：最后一个是client节点   ,以下三台都要操作
+
+cat <<EOF>> /etc/hosts
+192.168.224.142 server1
+192.168.224.143 server2
+192.168.224.144 server3
+EOF
+
+
+    mkfs.xfs -i size=512 /dev/sdb1
+    mkdir -p /data/brick1
+    echo '/dev/sdb1 /data/brick1 xfs defaults 1 2' >> /etc/fstab
+    mount -a && mount
+
+yum install -y bash-completion 
+yum install centos-release-gluster -y
+yum install -y glusterfs glusterfs-server glusterfs-fuse glusterfs-rdma
+systemctl start glusterd.service
+systemctl enable glusterd.service
+service glusterd status
+
+iptables -I INPUT -p all -s 192.168.224.142 -j ACCEPT
+iptables -I INPUT -p all -s 192.168.224.143 -j ACCEPT
+iptables -I INPUT -p all -s 192.168.224.144 -j ACCEPT
+
+
+来自“server1”
+    gluster peer probe server2
+    gluster peer probe server3
+
+来自“server2”
+    gluster peer probe server1
+
+检查server1上的对等体状态
+            gluster peer status
+
+步骤6 - 设置GlusterFS卷
+在所有服务器上：
+    mkdir -p /data/brick1/gv0
+
+从任何单一服务器：
+    gluster volume create gv0 replica 3 server1:/data/brick1/gv0 server2:/data/brick1/gv0 server3:/data/brick1/gv0
+    gluster volume start gv0
+
+确认卷显示“已启动”：
+    gluster volume info
+
+第7步 - 测试GlusterFS卷
+对于此步骤，我们将使用其中一个服务器来装入卷。通常，您可以从外部计算机（称为“客户端”）执行此操作。由于使用此方法需要在客户端计算机上安装其他软件包，我们将使用其中一个服务器作为首先进行测试的简单位置，就像它是“客户端”一样。
+
+    mount -t glusterfs server1:/gv0 /mnt
+      for i in `seq -w 1 100`; do cp -rp /var/log/messages /mnt/copy-test-$i; done
+
+
+首先，检查客户端挂载点：
+
+    ls -lA /mnt/copy* | wc -l
+您应该看到返回100个文件。接下来，检查每台服务器上的GlusterFS砖安装点：
+
+    ls -lA /data/brick1/gv0/copy*
+您应该使用我们在此处列出的方法在每台服务器上看到100个文件。如果没有复制，在仅分发卷（此处未详述）中，您应该在每个卷上看到大约33个文件。
+
+准备工作，在Glusterfs的master上
+cd /data/brick1/gv0/  &&  rm -rf * &&  echo Gluster > index.html
+
+[root@k8s-master gv0]#     gluster volume info
+
+Volume Name: gv0
+Type: Replicate
+Volume ID: 6bf89f23-13c1-42c5-bf10-46425a7b1f5a
+Status: Started
+Snapshot Count: 0
+Number of Bricks: 1 x 3 = 3
+Transport-type: tcp
+Bricks:
+Brick1: server1:/data/brick1/gv0
+Brick2: server2:/data/brick1/gv0
+Brick3: server3:/data/brick1/gv0
+Options Reconfigured:
+transport.address-family: inet
+nfs.disable: on
+performance.client-io-threads: off
+
+[root@k8s-master gv0]# cat /etc/hosts
+192.168.224.142 server1
+192.168.224.143 server2
+192.168.224.144 server3
+
+在k8s集群的所有服务器都要添加这个到hosts上
+cat << EOF >> /etc/hosts
+192.168.224.142 server1
+192.168.224.143 server2
+192.168.224.144 server3
+EOF
+
+每个k8s节点都要安装gluster的客户端工具
+yum install -y glusterfs-fuse
+
+
+
+在k8s上Node03操作
+[root@Node03 ~]# mount -t glusterfs server1:/gv0 /mnt
+
+[root@Node03 ~]# ls /mnt
+a              copy-test-017  copy-test-034  copy-test-051  copy-test-068  copy-test-085
+copy-test-001  copy-test-018  copy-test-035  copy-test-052  copy-test-069  copy-test-086
+。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
+这些文件是在glusterfs测试产生的文件，也挂载到本地目录上来了
+
+利用k8s的service把glusterfs整合在一块
+
+
+
+[root@Master01 volume]# mkdir glusterfs ; cd glusterfs
+
+cat << EOF > glusterfs-service.json
+{
+  "kind": "Service",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "glusterfs-cluster"
+  },
+  "spec": {
+    "ports": [
+      {"port": 1}
+    ]
+  }
+}
+EOF
+
+cat << EOF > glusterfs-pod.json
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "name": "glusterfs"
+    },
+    "spec": {
+        "containers": [
+            {
+                "name": "glusterfs",
+                "image": "kubernetes/pause",
+                "volumeMounts": [
+                    {
+                        "mountPath": "/mnt/glusterfs",
+                        "name": "glusterfsvol"
+                    }
+                ]
+            }
+        ],
+        "volumes": [
+            {
+                "name": "glusterfsvol",
+                "glusterfs": {
+                    "endpoints": "glusterfs-cluster",
+                    "path": "kube_vol",
+                    "readOnly": true
+                }
+            }
+        ]
+    }
+}
+EOF
+
+
+
+
+cat << EOF > glusterfs-endpoints.json
+{
+  "kind": "Endpoints",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "glusterfs-cluster"
+  },
+  "subsets": [
+    {
+      "addresses": [
+        {
+          "ip": "192.168.224.142"
+        }
+      ],
+      "ports": [
+        {
+          "port": 1
+        }
+      ]
+    },
+    {
+      "addresses": [
+        {
+          "ip": "192.168.224.143"
+        }
+      ],
+      "ports": [
+        {
+          "port": 1
+        }
+      ]
+    },
+    {
+      "addresses": [
+        {
+          "ip": "192.168.224.144"
+        }
+      ],
+      "ports": [
+        {
+          "port": 1
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+
+cat << EOF > nginx-deployment.yaml
+apiVersion: extensions/v1beta1 
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: glusterfsvo1
+          mountPath: /usr/share/nginx/html
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: glusterfsvo1
+        glusterfs:
+          endpoints: glusterfs-cluster
+          path: gv0
+          readOnly: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  type: NodePort
+EOF
+
+
+[root@Master01 gclusterfs]# kubectl create -f glusterfs-endpoints.json
+endpoints "glusterfs-cluster" created
+
+[root@Master01 gclusterfs]# kubectl get ep
+NAME                ENDPOINTS                                               AGE
+glusterfs-cluster   192.168.224.142:1,192.168.224.143:1,192.168.224.144:1   3m
+
+[root@Master01 gclusterfs]# kubectl create -f glusterfs-service.json
+service "glusterfs-cluster" created
+
+[root@Master01 gclusterfs]# kubectl get svc
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+glusterfs-cluster   ClusterIP   10.254.118.211   <none>        1/TCP          11s
+
+
+删除以前Nfs测试的
+[root@Master01 volume]# kubectl delete -f ../nginx-deployment.yaml
+deployment "nginx-deployment" deleted
+
+[root@Master01 volume]# kubectl delete -f ../nginx-service.yaml
+service "nginx-service" deleted
+
+[root@Master01 glusterfs]# kubectl create -f nginx-deployment.yaml
+deployment "nginx-deployment" created
+service "nginx-service" created
+
+[root@Master01 glusterfs]# kubectl get po
+NAME                               READY     STATUS    RESTARTS   AGE
+nginx-deployment-b55b5b655-58b9v   1/1       Running   0          29s
+nginx-deployment-b55b5b655-gftm2   1/1       Running   0          29s
+nginx-deployment-b55b5b655-m24h4   1/1       Running   0          29s
+
+ 
+[root@Master01 glusterfs]# kubectl get svc
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+glusterfs-cluster   ClusterIP   10.254.118.211   <none>        1/TCP          59m
+nginx-service       NodePort    10.254.84.255    <none>        80:24858/TCP   58s
+
+ 
+
+[root@Master01 glusterfs]# kubectl exec -it nginx-deployment-b55b5b655-m24h4 bash
+root@nginx-deployment-b55b5b655-m24h4:/# mount | grep gluster
+192.168.224.142:gv0 on /usr/share/nginx/html type fuse.glusterfs (rw,relatime,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072)
+
+挂载到了192.168.224.142，现在把192.168.224.142这台服务器停掉
+
+[root@k8s-master gv0]# ip a | grep 192
+    inet 192.168.224.142/24 brd 192.168.224.255 scope global ens33
+
+[root@k8s-master gv0]# systemctl stop glusterd
+
+[root@k8s-master gv0]# gluster peer status
+Connection failed. Please check if gluster daemon is operational.
+ 
+F5刷新页面，依然能访问
+ 
+
+[root@Master01 glusterfs]# kubectl exec -it nginx-deployment-b55b5b655-gftm2 bash
+root@nginx-deployment-b55b5b655-gftm2:/# mount | grep gluster
+192.168.224.142:gv0 on /usr/share/nginx/html type fuse.glusterfs (rw,relatime,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072)
+
+
+[root@k8s-master gv0]# systemctl start glusterd
+[root@k8s-master gv0]# gluster peer status
+Number of Peers: 2
+
+Hostname: server2
+Uuid: d9147123-e428-4769-9208-4b40444a602f
+State: Peer in Cluster (Connected)
+
+Hostname: server3
+Uuid: 219524a5-db2f-4762-a9f7-53a1b825434a
+State: Peer in Cluster (Connected)
+
+
+
+更多k8s支持的数据卷，请参考：
+https://kubernetes.io/docs/concepts/storage/volumes/
+
+
