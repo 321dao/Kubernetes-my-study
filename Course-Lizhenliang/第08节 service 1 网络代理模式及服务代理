@@ -1,0 +1,166 @@
+Service
+ 网络代理模式
+ 服务代理
+ 服务发现
+ 发布服务
+
+Service – 网络代理模式
+三种代理模式：userspace、iptables(默认的,第二张图)和ipvs
+官方文档：https://kubernetes.io/docs/concepts/services-networking/service
+
+ 
+userspace模式
+
+[root@Master01 pod]# kubectl get svc
+NAME            TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+kubernetes      ClusterIP   10.254.0.1      <none>        443/TCP        4d
+nginx-ds        NodePort    10.254.45.130   <none>        80:24064/TCP   4d
+nginx-service   ClusterIP   10.254.69.214   <none>        88/TCP         4h
+
+客户端请求serverIP--交给kube-proxy--
+serverIP如何查看：
+在node节点上
+[root@Node01 ~]# iptables-save | grep 88
+-A KUBE-SERVICES ! -s 10.254.0.0/16 -d 10.254.69.214/32 -p tcp -m comment --comment "default/nginx-service: cluster IP" -m tcp --dport 88 -j KUBE-MARK-MASQ
+-A KUBE-SERVICES -d 10.254.69.214/32 -p tcp -m comment --comment "default/nginx-service: cluster IP" -m tcp --dport 88 -j KUBE-SVC-GKN7Y2BSGW4NJTYL
+在节点上访问虚拟ip  10.254.69.214  ，会在本机进行转发，会转发到kube-proxy组件中，组件再转发到pod中，这是早期k8s的代理方式，效率低。
+
+
+在node节点上
+[root@Node01 ~]# ps xua | grep kube-proxy
+root       918  0.2  2.2  51160 22392 ?        Ssl  19:18   0:12 /usr/k8s/bin/kube-proxy --bind-address=192.168.224.183 --hostname-override=192.168.224.183 --cluster-cidr=10.254.0.0/16 --kubeconfig=/etc/kubernetes/kube-proxy.kubeconfig --logtostderr=true --v=2
+
+
+
+
+ 
+iptables模式
+用户请求--到达iptables规则，每个节点上都会有，收到访问的cluster IP后，直接转到容器的endpoint上
+[root@Node01 ~]# kubectl get ep
+NAME            ENDPOINTS                                                  AGE
+kubernetes      192.168.224.181:6443,192.168.224.182:6443                  4d
+nginx-ds        172.30.45.2:80,172.30.66.2:80,172.30.90.2:80               4d
+nginx-service   172.30.45.4:80,172.30.66.5:80,172.30.66.6:80 + 1 more...   4h
+
+
+kube-proxy起到的作用是，从apiserver中去拉service相关联的endpoint，去生成这些规则，例如：172.30.45.4， 因为它要接收到iptables后转发到相关的pod中。
+[root@Node01 ~]# iptables-save | grep "172.30.45.4"
+-A KUBE-SEP-CWL6VKCGQQRMCWKR -s 172.30.45.4/32 -m comment --comment "default/nginx-service:" -j KUBE-MARK-MASQ
+-A KUBE-SEP-CWL6VKCGQQRMCWKR -p tcp -m comment --comment "default/nginx-service:" -m tcp -j DNAT --to-destination 172.30.45.4:80
+
+
+
+
+[root@Node01 ~]# iptables-save | grep 88
+-A KUBE-SERVICES ! -s 10.254.0.0/16 -d 10.254.69.214/32 -p tcp -m comment --comment "default/nginx-service: cluster IP" -m tcp --dport 88 -j KUBE-MARK-MASQ
+-A KUBE-SERVICES -d 10.254.69.214/32 -p tcp -m comment --comment "default/nginx-service: cluster IP" -m tcp --dport 88 -j KUBE-SVC-GKN7Y2BSGW4NJTYL
+
+
+
+ 
+ipvs模式
+这是从1.8版本开始用的，是专业的开源的负载均衡方案，比iptables性能更高。但目前还在公测，不适于用于生产环境。
+是通过ipv模块转发的，
+ 
+
+
+
+
+
+Service – 服务代理
+[root@Master01 service]# vim service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app: MyApp
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  - name: https
+    protocol: TCP
+    port: 443
+    targetPort: 443
+
+有两个name，如果只有一个，那么-name： string 可以省略
+
+[root@Master01 service]# kubectl create -f .
+service "my-service" created
+
+[root@Master01 service]# kubectl get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+my-service      ClusterIP   10.254.122.154   <none>        80/TCP,443/TCP   44s
+
+10.254.122.154+80
+默认的类型是ClusterIP   ，这个网段是在kube-apiserver配置中规范了。例如下面的，10.254.0.0/16
+[root@Master01 service]# ps xua | grep apiserver
+root      1169  2.1 22.6 401456 228124 ?       Ssl  20:01   1:52 /usr/k8s/bin/kube-apiserver --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota --advertise-address=192.168.224.181 --bind-address=0.0.0.0 --insecure-bind-address=192.168.224.181 --authorization-mode=Node,RBAC --runtime-config=rbac.authorization.k8s.io/v1alpha1 --kubelet-https=true --enable-bootstrap-token-auth --token-auth-file=/etc/kubernetes/token.csv --service-cluster-ip-range=10.254.0.0/16 。。。。。。。。
+
+负载均衡后面带有哪些pod呢，可以通过下面的命令看到。
+
+
+[root@Master01 service]# kubectl get ep my-service
+NAME         ENDPOINTS   AGE
+my-service   <none>      6m
+发现没有endpoint，如何让其有endpoint呢？通过修改service的标签，改到已有的pod的标签上去
+
+例如这个
+[root@Master01 service]# kubectl get pods
+NAME                               READY     STATUS    RESTARTS   AGE
+nginx-pod                          1/1       Running   1          1h
+
+获取nginx-pod的label，转接到my-service上
+
+[root@Master01 service]# kubectl get pod nginx-pod  --show-labels -o wide
+NAME        READY     STATUS    RESTARTS   AGE       IP            NODE              LABELS
+nginx-pod   1/1       Running   1          1h        172.30.66.6   192.168.224.184   app=nginx
+
+[root@Master01 service]# kubectl edit svc/my-service
+
+  selector:
+    app: MyApp  这里改为nginx
+
+[root@Master01 service]# kubectl get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+my-service      ClusterIP   10.254.122.154   <none>        80/TCP,443/TCP   19m
+
+[root@Master01 service]# kubectl get ep my-service
+NAME         ENDPOINTS                                                  AGE
+my-service   172.30.45.4:80,172.30.66.5:80,172.30.66.6:80 + 5 more...   24m
+发现有了endpoint，
+
+现在可以在任何节点上访问10.254.122.154 + 80 ，就可以访问到相关的服务了。
+
+[root@Node01 ~]# curl 10.254.122.154:80
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+
+
