@@ -79,6 +79,12 @@ cd /usr/local/src
 
 k8s-1.97-install.tar.gz
 
+或到百度云获取
+ 
+链接：https://pan.baidu.com/s/1o135GUhT0Vif1hwfJGw7pA 
+提取码：hqja 
+ 
+
 解压
 
 tar xvf k8s-1.97-install.tar.gz
