@@ -1,0 +1,145 @@
+Ingress
+ Ingress介绍
+ 部署Default Backend
+ 部署Ingress Controller
+ 部署Ingress
+ 部署Ingress TLS
+
+
+ 
+service发布服务
+
+ 
+Ingress发布服务，创建一个负载均衡，
+会在每个节点上创建一个负载均衡，
+ 
+把每个node节点创建一个负载均衡，代理所有的pod，效率会更高
+ 
+原理；用户请求ingress控制器，该控制器通过nginx实现负载均衡，ingress控制器通过已关联的service名称获取到pod的ip，也就是这个service的endpoint，然后加入到nginx的配置文件中，也就是负载均衡中，访问nginx的域名+域名就可以访问到后端应用的pod，
+[root@Master01 nginx]# kubectl get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+expose-nginx    NodePort    10.254.158.168   <none>        88:37570/TCP   7h
+kubernetes      ClusterIP   10.254.0.1       <none>        443/TCP        5d
+nginx-ds        NodePort    10.254.45.130    <none>        80:24064/TCP   5d
+nginx-service   NodePort    10.254.249.67    <none>        80:29575/TCP   39m
+
+[root@Master01 nginx]# kubectl get ep
+NAME            ENDPOINTS                                                  AGE
+expose-nginx    172.30.45.5:80,172.30.45.6:80,172.30.66.3:80 + 1 more...   7h
+kubernetes      192.168.224.181:6443,192.168.224.182:6443                  5d
+nginx-ds        172.30.45.3:80,172.30.66.2:80,172.30.90.4:80               5d
+nginx-service   172.30.45.5:80,172.30.45.6:80,172.30.66.3:80 + 1 more...   40m
+
+ingress的组成：
+  Nginx 实现负载均衡访问后端pid的集合，
+  Ingress Controller 实现从集群的api获取service实时的endpoint，并注入nginx的配置文件中，并且刷新重载，也就是-s reload，
+    Ingress 为nginx创建规则，例如创建一个虚拟主机，需要创建一个配置文件，放到nginx的配置目录下，使其生效，ingress就是自动创建虚拟主机的。例如 a.com代理的是哪个service服务，ingress会自动创建一个a.com的虚拟主机，并且负载均衡的节点是pod的ip。
+
+
+Ingress – 部署
+注意：需修改国内镜像下载地址
+官方文档：https://github.com/kubernetes/ingress-nginx/tree/master/deploy
+
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/namespace.yaml 
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/default-backend.yaml 
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/tcp-services-configmap.yaml 
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/udp-services-configmap.yaml 
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/rbac.yaml 
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/with-rbac.yaml 
+
+sed -i 's/gcr.io/registry.cn-hangzhou.aliyuncs.com/' default-backend.yaml
+
+[root@Master01 ingress]# kubectl create -f namespace.yaml
+
+[root@k8s-master ingress]# kubectl get all -n ingress-nginx
+
+[root@k8s-master ingress]# kubectl get all -n ingress-nginx
+
+[root@k8s-master ingress]# kubectl create -f tcp-services-configmap.yaml
+configmap "tcp-services" created
+
+[root@k8s-master ingress]# kubectl create -f udp-services-configmap.yaml
+configmap "udp-services" created
+
+[root@k8s-master ingress]# kubectl create -f rbac.yaml
+serviceaccount "nginx-ingress-serviceaccount" created
+clusterrole "nginx-ingress-clusterrole" created
+role "nginx-ingress-role" created
+rolebinding "nginx-ingress-role-nisa-binding" created
+clusterrolebinding "nginx-ingress-clusterrole-nisa-binding" created
+
+
+
+创建文件
+
+cat > deployment.yaml <<EOF
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+  namespace: ingress-nginx 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app: ingress-nginx
+      annotations:
+        prometheus.io/port: '10254'
+        prometheus.io/scrape: 'true'
+    spec:
+      serviceAccountName: nginx-ingress-serviceaccount
+      hostNetwork: true
+      containers:
+        - name: nginx-ingress-controller
+          image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.19.0
+          args:
+            - /nginx-ingress-controller
+            - --default-backend-service=\$(POD_NAMESPACE)/default-http-backend
+            - --configmap=\$(POD_NAMESPACE)/nginx-configuration
+            - --tcp-services-configmap=\$(POD_NAMESPACE)/tcp-services
+            - --udp-services-configmap=\$(POD_NAMESPACE)/udp-services
+#            - --annotations-prefix=nginx.ingress.kubernetes.io
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+          - name: http
+            containerPort: 80
+          - name: https
+            containerPort: 443
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 10254
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 10254
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+EOF
+
+
+
+[root@k8s-master ingress]# kubectl create -f deployment.yaml
+deployment "nginx-ingress-controller" created
+
