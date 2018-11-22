@@ -40,13 +40,21 @@ exportfs
 #可以查看到已经ok
 /opt/nfs/data 192.168.224.0/24
  
-四、在从机上安装NFS 客户端 (三台node都要装上)
+四、在从机上安装NFS 客户端 (包括三台node都要装上)
 
-首先是安裝nfs，同上，然后启动rpcbind服务，先为rpcbind做开机启动：然后启动rpcbind服务：
 
-yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+   yum install -y nfs-utils
+   mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+   yum install -y nfs-utils && systemctl enable rpcbind.service && systemctl start rpcbind.service
+   systemctl enable rpcbind.service && systemctl start rpcbind.service
+   mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+   echo Nfs > index.html
+   showmount -e 192.168.224.131
+   mkdir -p /opt/nfs/data
+   mount -t nfs 192.168.224.131:/opt/nfs/data  /opt/nfs/data
 
-mkdir -p /opt/nfs/data  && cd /opt/nfs/data
+
+
 echo Nfs > index.html
 
 
