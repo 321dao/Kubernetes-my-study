@@ -1,0 +1,318 @@
+ 
+[root@master ~]# kubectl get all -o wide
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/nginx   3         3         3            3           5h        nginx        nginx:1.12   run=nginx
+
+NAME                  DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/nginx-5fc8fd597f   3         3         3         1h        nginx        nginx:1.12   pod-template-hash=1974981539,run=nginx
+rs/nginx-8586cf59     0         0         0         5h        nginx        nginx        pod-template-hash=41427915,run=nginx
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/nginx   3         3         3            3           5h        nginx        nginx:1.12   run=nginx
+
+NAME                  DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/nginx-5fc8fd597f   3         3         3         1h        nginx        nginx:1.12   pod-template-hash=1974981539,run=nginx
+rs/nginx-8586cf59     0         0         0         5h        nginx        nginx        pod-template-hash=41427915,run=nginx
+
+NAME                        READY     STATUS    RESTARTS   AGE       IP            NODE
+po/nginx-5fc8fd597f-rvl6h   1/1       Running   0          1h        172.17.52.4   192.168.224.144
+po/nginx-5fc8fd597f-v6fpc   1/1       Running   0          1h        172.17.3.4    192.168.224.143
+po/nginx-5fc8fd597f-wlc7f   1/1       Running   0          1h        172.17.3.5    192.168.224.143
+
+NAME             TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE       SELECTOR
+svc/kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        5h        <none>
+svc/nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   5h        run=nginx
+
+
+删除资源
+[root@master ~]# kubectl delete deploy/nginx
+deployment "nginx" deleted
+
+[root@master ~]# kubectl delete svc/nginx
+service "nginx" deleted
+
+
+问题: .删除pod后，pod 一直处于terminating状态
+解决:  kubectl delete pod pod-name --grace-period=0 --force
+
+[root@master ~]# kubectl get all
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   5h
+
+
+[root@master ~]# kubectl run nginx --replicas=3 --labels="app=nginx-example" --image=nginx:1.10 --port=80
+deployment "nginx" created
+
+
+[root@master ~]# kubectl get all
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            0           37s
+
+NAME                 DESIRED   CURRENT   READY     AGE
+rs/nginx-f95d765f9   3         3         0         37s
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            0           37s
+
+NAME                 DESIRED   CURRENT   READY     AGE
+rs/nginx-f95d765f9   3         3         0         37s
+
+NAME                       READY     STATUS              RESTARTS   AGE
+po/nginx-f95d765f9-ssjfc   0/1       ContainerCreating   0          37s
+po/nginx-f95d765f9-tlr8t   0/1       ContainerCreating   0          37s
+po/nginx-f95d765f9-txflt   0/1       ContainerCreating   0          37s
+
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   5h
+
+
+
+[root@master ~]# kubectl describe po/nginx-f95d765f9-ssjfc
+Name:           nginx-f95d765f9-ssjfc
+Namespace:      default
+Node:           192.168.224.143/192.168.224.143
+Start Time:     Tue, 18 Sep 2018 17:21:24 +0800
+Labels:         app=nginx-example
+                pod-template-hash=951832195
+Annotations:    <none>
+Status:         Running
+IP:             172.17.3.2
+Controlled By:  ReplicaSet/nginx-f95d765f9
+Containers:
+  nginx:
+    Container ID:   docker://6ee398114d5ac4df7e479aeffcfe2d886af5eb4f6111b4101155bd546fd28b16
+    Image:          nginx:1.10
+    Image ID:       docker-pullable://nginx@sha256:6202beb06ea61f44179e02ca965e8e13b961d12640101fca213efbfd145d7575
+    Port:           80/TCP
+    State:          Running
+      Started:      Tue, 18 Sep 2018 17:22:24 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-vsrks (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-vsrks:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-vsrks
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              5m    default-scheduler         Successfully assigned nginx-f95d765f9-ssjfc to 192.168.224.143
+  Normal  SuccessfulMountVolume  5m    kubelet, 192.168.224.143  MountVolume.SetUp succeeded for volume "default-token-vsrks"
+  Normal  Pulling                5m    kubelet, 192.168.224.143  pulling image "nginx:1.10"
+  Normal  Pulled                 4m    kubelet, 192.168.224.143  Successfully pulled image "nginx:1.10"
+  Normal  Created                4m    kubelet, 192.168.224.143  Created container
+  Normal  Started                4m    kubelet, 192.168.224.143  Started container
+
+
+查看某个信息
+[root@master ~]# kubectl get deploy
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+nginx     3         3         3            3           12m
+
+
+[root@master ~]# kubectl get -h
+
+  * all
+  * certificatesigningrequests (aka 'csr')
+  * clusterrolebindings
+  * clusterroles
+  * componentstatuses (aka 'cs')
+  * configmaps (aka 'cm')
+  * controllerrevisions
+  * cronjobs
+  * customresourcedefinition (aka 'crd')
+  * daemonsets (aka 'ds')
+  * deployments (aka 'deploy')
+  * endpoints (aka 'ep')
+  * events (aka 'ev')
+  * horizontalpodautoscalers (aka 'hpa')
+  * ingresses (aka 'ing')
+  * jobs
+  * limitranges (aka 'limits')
+  * namespaces (aka 'ns')
+  * networkpolicies (aka 'netpol')
+  * nodes (aka 'no')
+  * persistentvolumeclaims (aka 'pvc')
+  * persistentvolumes (aka 'pv')
+  * poddisruptionbudgets (aka 'pdb')
+  * podpreset
+  * pods (aka 'po')
+  * podsecuritypolicies (aka 'psp')
+  * podtemplates
+  * replicasets (aka 'rs')
+  * replicationcontrollers (aka 'rc')
+  * resourcequotas (aka 'quota')
+  * rolebindings
+  * roles
+  * secrets
+  * serviceaccounts (aka 'sa')
+  * services (aka 'svc')
+  * statefulsets (aka 'sts')
+  * storageclasses (aka 'sc')
+
+[root@k8s-master ~]# kubectl get deploy
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+nginx     3         3         3            3           18m
+
+[root@k8s-master ~]# kubectl get rs
+NAME              DESIRED   CURRENT   READY     AGE
+nginx-f95d765f9   3         3         3         19m
+ 
+[root@k8s-master ~]# kubectl get pod
+NAME                    READY     STATUS    RESTARTS   AGE
+nginx-f95d765f9-ssjfc   1/1       Running   0          19m
+nginx-f95d765f9-tlr8t   1/1       Running   0          19m
+nginx-f95d765f9-txflt   1/1       Running   0          19m
+
+[root@k8s-master ~]# kubectl get svc
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   6h
+
+列出多个资源
+ [root@k8s-master ~]# kubectl get svc,deploy
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   6h
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           20m
+
+查看所有标签
+[root@k8s-master ~]# kubectl get pods --show-labels
+NAME                    READY     STATUS    RESTARTS   AGE       LABELS
+nginx-f95d765f9-ssjfc   1/1       Running   0          25m       app=nginx-example,pod-template-hash=951832195
+nginx-f95d765f9-tlr8t   1/1       Running   0          25m       app=nginx-example,pod-template-hash=951832195
+nginx-f95d765f9-txflt   1/1       Running   0          25m       app=nginx-example,pod-template-hash=951832195
+传输命令
+[root@k8s-master ~]# kubectl run busybox --image=busybox --command -- ping baidu.com
+deployment "busybox" created
+
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            1           30s
+deploy/nginx     3         3         3            3           30m
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         1         30s
+rs/nginx-f95d765f9      3         3         3         30m
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            1           30s
+deploy/nginx     3         3         3            3           30m
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         1         30s
+rs/nginx-f95d765f9      3         3         3         30m
+
+NAME                          READY     STATUS    RESTARTS   AGE
+po/busybox-5d4f595646-fchnw   1/1       Running   0          30s
+po/nginx-f95d765f9-ssjfc      1/1       Running   0          30m
+po/nginx-f95d765f9-tlr8t      1/1       Running   0          30m
+po/nginx-f95d765f9-txflt      1/1       Running   0          30m
+
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   6h
+
+
+查看标签
+[root@k8s-master ~]# kubectl get pods --show-labels
+NAME                       READY     STATUS    RESTARTS   AGE       LABELS
+busybox-5d4f595646-fchnw   1/1       Running   4          4m        pod-template-hash=1809151202,run=busybox
+nginx-f95d765f9-ssjfc      1/1       Running   0          34m       app=nginx-example,pod-template-hash=951832195
+nginx-f95d765f9-tlr8t      1/1       Running   0          34m       app=nginx-example,pod-template-hash=951832195
+nginx-f95d765f9-txflt      1/1       Running   0          34m       app=nginx-example,pod-template-hash=951832195
+
+列出匹配的标签
+[root@k8s-master ~]# kubectl get pods -l app=nginx-example
+NAME                    READY     STATUS    RESTARTS   AGE
+nginx-f95d765f9-ssjfc   1/1       Running   0          35m
+nginx-f95d765f9-tlr8t   1/1       Running   0          35m
+nginx-f95d765f9-txflt   1/1       Running   0          35m
+
+
+
+[root@k8s-master ~]# kubectl get pods -l run=busybox
+NAME                       READY     STATUS             RESTARTS   AGE
+busybox-5d4f595646-fchnw   0/1       CrashLoopBackOff   4          6m
+
+
+查看资源的详细信息
+[root@k8s-master ~]# kubectl get pods -o wide
+NAME                       READY     STATUS             RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-fchnw   0/1       CrashLoopBackOff   5          7m        172.17.3.4    192.168.224.143
+nginx-f95d765f9-ssjfc      1/1       Running            0          37m       172.17.3.2    192.168.224.143
+nginx-f95d765f9-tlr8t      1/1       Running            0          37m       172.17.52.2   192.168.224.144
+nginx-f95d765f9-txflt      1/1       Running            0          37m       172.17.52.3   192.168.224.144
+
+[root@k8s-master ~]# kubectl get deploy -o wide
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+busybox   1         1         1            0           7m        busybox      busybox      run=busybox
+nginx     3         3         3            3           37m       nginx        nginx:1.10   app=nginx-example
+
+
+
+发布
+[root@k8s-master master]# kubectl expose deployment nginx --port=88 --type=NodePort --target-port=80 --name=nginx-servcie
+service "nginx-servcie" exposed 
+
+
+[root@Master01 ui]# kubectl expose -h
+ 
+Examples:
+  # Create a service for a replicated nginx, which serves on port 80 and connects to the containers on port 8000.
+  kubectl expose rc nginx --port=80 --target-port=8000
+
+  # Create a service for a replication controller identified by type and name specified in "nginx-controller.yaml",
+which serves on port 80 and connects to the containers on port 8000.
+  kubectl expose -f nginx-controller.yaml --port=80 --target-port=8000
+
+  # Create a service for a pod valid-pod, which serves on port 444 with the name "frontend"
+  kubectl expose pod valid-pod --port=444 --name=frontend
+
+  # Create a second service based on the above service, exposing the container port 8443 as port 443 with the name
+"nginx-https"
+  kubectl expose service nginx --port=443 --target-port=8443 --name=nginx-https
+
+  # Create a service for a replicated streaming application on port 4100 balancing UDP traffic and named 'video-stream'.
+  kubectl expose rc streamer --port=4100 --protocol=udp --name=video-stream
+
+  # Create a service for a replicated nginx using replica set, which serves on port 80 and connects to the containers on
+port 8000.
+  kubectl expose rs nginx --port=80 --target-port=8000
+
+  # Create a service for an nginx deployment, which serves on port 80 and connects to the containers on port 8000.
+  kubectl expose deployment nginx --port=80 --target-port=8000
+
+
+此nginx是来自于下面的查询
+
+[root@k8s-master master]# kubectl get deploy
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+busybox   1         1         1            0           2h
+nginx     3         3         3            0           2h
+
+执行后结果查询
+[root@k8s-master master]# kubectl  get svc
+NAME            TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+kubernetes      ClusterIP   10.10.10.1     <none>        443/TCP        8h
+nginx-servcie   NodePort    10.10.10.188   <none>        88:43570/TCP   3m
+在node节点可以通过 curl 10.10.10.188: 88  访问nginx
+也可以在任何服务器 curl 任何一个Node节点的ip+43570 访问
+例如:  curl 192.168.224.144:43570
+
+原理是通过iptables转发的
+[root@k8s-node-1 ~]# iptables-save | grep 88
+-A KUBE-SERVICES -d 10.10.10.24/32 -p tcp -m comment --comment "default/nginx-service: cluster IP" -m tcp --dport 88 -j KUBE-SVC-GKN7Y2BSGW4NJTYL
+
+kubectl expose 的暴露功能是由kube-proxy帮忙实现的
+
