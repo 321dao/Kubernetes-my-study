@@ -1,0 +1,15 @@
+应用日志收集（Filebeat+ELK）
+ 
+Filebeat：日志采集工具。传输到logstash上,
+Logstash：数据处理引擎。支持从各种数据源收集数据，并对数据进行过滤、分析等操作。满足日志分类
+Elasticsearch：分布式搜索引擎。用于全文检索。
+Kibana：可视化平台。能够搜索、展示存储在ES中索引数据。可以很方面以图表、表格、地图形式展示。
+
+插件位置
+https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/fluentd-elasticsearch
+
+fluentd-es-configmap.yaml  收集每个节点的位置,包括容器运行时的日志,容器控制台的日志,收集完后存储到fluentd-elasticsearch,然后通过kibana展示fluentd-elasticsearch的数据,只能收集每个pod中logs容器控制台输出的日志,不能按天切割日志,不大能满足生产需求
+
+开源的官网介绍
+https://www.elastic.co/cn/products
+
