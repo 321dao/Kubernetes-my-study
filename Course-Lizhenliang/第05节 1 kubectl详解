@@ -1,0 +1,482 @@
+这可以实现即时更新
+[root@master ~]# kubectl --help
+ 
+Basic Commands (Beginner):
+  create         Create a resource from a file or from stdin.
+  expose         使用 replication controller, service, deployment 或者 pod 并暴露它作为一个 新的Kubernetes Service
+  run            在集群中运行一个指定的镜像
+  set            为 objects 设置一个指定的特征
+  run-container  在集群中运行一个指定的镜像. This command is deprecated, use "run" instead
+
+Basic Commands (Intermediate):
+  get            显示一个或更多 resources
+  explain        查看资源的文档
+  edit           在服务器上编辑一个资源
+  delete         Delete resources by filenames, stdin, resources and names, or by resources and label selector
+
+Deploy Commands:
+  rollout        Manage the rollout of a resource
+  rolling-update 完成指定的 ReplicationController 的滚动升级
+  scale          为 Deployment, ReplicaSet, Replication Controller 或者 Job 设置一个新的副本数量
+  autoscale      自动调整一个 Deployment, ReplicaSet, 或者 ReplicationController 的副本数量
+
+Cluster Management Commands:
+  certificate    修改 certificate 资源.
+  cluster-info   显示集群信息
+  top            Display Resource (CPU/Memory/Storage) usage.
+  cordon         标记 node 为 unschedulable
+  uncordon       标记 node 为 schedulable
+  drain          Drain node in preparation for maintenance
+  taint          更新一个或者多个 node 上的 taints
+
+Troubleshooting and Debugging Commands:
+  describe       显示一个指定 resource 或者 group 的 resources 详情
+  logs           输出容器在 pod 中的日志
+  attach         Attach 到一个运行中的 container
+  exec           在一个 container 中执行一个命令
+  port-forward   Forward one or more local ports to a pod
+  proxy          运行一个 proxy 到 Kubernetes API server
+  cp             复制 files 和 directories 到 containers 和从容器中复制 files 和 directories.
+  auth           Inspect authorization
+
+Advanced Commands:
+  apply          通过文件名或标准输入流(stdin)对资源进行配置
+  patch          使用 strategic merge patch 更新一个资源的 field(s)
+  replace        通过 filename 或者 stdin替换一个资源
+  convert        在不同的 API versions 转换配置文件
+
+Settings Commands:
+  label          更新在这个资源上的 labels
+  annotate       更新一个资源的注解
+  completion     Output shell completion code for the specified shell (bash or zsh)
+
+Other Commands:
+  api-versions   Print the supported API versions on the server, in the form of "group/version"
+  config         修改 kubeconfig 文件
+  help           Help about any command
+  plugin         Runs a command-line plugin
+  version        输出 client 和 server 的版本信息
+
+Use "kubectl <command> --help" for more information about a given command.
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+
+
+
+[root@master ~]# kubectl create --help
+Create a resource from a file or from stdin.
+
+JSON and YAML formats are accepted.
+
+Examples:
+  # Create a pod using the data in pod.json.
+  kubectl create -f ./pod.json
+
+  # Create a pod based on the JSON passed into stdin.
+  cat pod.json | kubectl create -f -  
+
+  # Edit the data in docker-registry.yaml in JSON using the v1 API format then create the resource using the edited
+data.
+  kubectl create -f docker-registry.yaml --edit --output-version=v1 -o json
+
+Available Commands:
+  clusterrole         Create a ClusterRole.
+  clusterrolebinding  为一个指定的 ClusterRole 创建一个 ClusterRoleBinding
+  configmap           从本地 file, directory 或者 literal value 创建一个 configmap
+  deployment          创建一个指定名称的 deployment.
+  namespace           创建一个指定名称的 namespace
+  poddisruptionbudget 创建一个指定名称的 pod disruption budget.
+  priorityclass       Create a priorityclass with the specified name.
+  quota               创建一个指定名称的 quota.
+  role                Create a role with single rule.
+  rolebinding         为一个指定的 Role 或者 ClusterRole创建一个 RoleBinding
+  secret              使用指定的 subcommand 创建一个 secret
+  service             使用指定的 subcommand 创建一个 service.
+  serviceaccount      创建一个指定名称的 service account
+
+Options:
+      --allow-missing-template-keys=true: If true, ignore any errors in templates when a field or map key is missing in
+the template. Only applies to golang and jsonpath output formats.
+      --dry-run=false: If true, only print the object that would be sent, without sending it.
+      --edit=false: Edit the API resource before creating
+  -f, --filename=[]: Filename, directory, or URL to files to use to create the resource
+      --include-extended-apis=true: If true, include definitions of new APIs via calls to the API server. [default true]
+      --no-headers=false: When using the default or custom-column output format, don't print headers (default print
+headers).
+  -o, --output='': Output format. One of:
+json|yaml|wide|name|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...
+See custom columns [http://kubernetes.io/docs/user-guide/kubectl-overview/#custom-columns], golang template
+[http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template
+[http://kubernetes.io/docs/user-guide/jsonpath].
+      --raw='': Raw URI to POST to the server.  Uses the transport specified by the kubeconfig file.
+      --record=false: Record current kubectl command in the resource annotation. If set to false, do not record the
+command. If set to true, record the command. If not set, default to updating the existing annotation value only if one
+already exists.
+  -R, --recursive=false: Process the directory used in -f, --filename recursively. Useful when you want to manage
+related manifests organized within the same directory.
+      --save-config=false: If true, the configuration of current object will be saved in its annotation. Otherwise, the
+annotation will be unchanged. This flag is useful when you want to perform kubectl apply on this object in the future.
+  -l, --selector='': Selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)
+  -a, --show-all=false: When printing, show all resources (default hide terminated pods.)
+      --show-labels=false: When printing, show all labels as the last column (default hide labels column)
+      --sort-by='': If non-empty, sort list types using this field specification.  The field specification is expressed
+as a JSONPath expression (e.g. '{.metadata.name}'). The field in the API resource specified by this JSONPath expression
+must be an integer or a string.
+      --template='': Template string or path to template file to use when -o=go-template, -o=go-template-file. The
+template format is golang templates [http://golang.org/pkg/text/template/#pkg-overview].
+      --validate=true: If true, use a schema to validate the input before sending it
+      --windows-line-endings=false: Only relevant if --edit=true. Defaults to the line ending native to your platform.
+
+Usage:
+  kubectl create -f FILENAME [options]
+
+Use "kubectl <command> --help" for more information about a given command.
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+
+实例:
+[root@master ~]# kubectl create namespace hx
+namespace "hx" created
+[root@master ~]# kubectl get ns
+NAME          STATUS    AGE
+default       Active    4h
+hx            Active    17s
+kube-public   Active    4h
+kube-system   Active    4h
+
+ 
+[root@master ~]# kubectl get svc
+NAME         TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        4h
+nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   3h
+
+
+对资源进行更改
+[root@master ~]# kubectl  set --help
+Configure application resources
+
+These commands help you make changes to existing application resources.
+
+Available Commands:
+  env            Update environment variables on a pod template
+  image          更新一个 pod template 的镜像
+  resources      在对象的 pod templates 上更新资源的 requests/limits
+  selector       设置 resource 的 selector
+  serviceaccount Update ServiceAccount of a resource
+  subject        Update User, Group or ServiceAccount in a RoleBinding/ClusterRoleBinding
+
+Usage:
+  kubectl set SUBCOMMAND [options]
+ 
+
+
+
+
+
+
+[root@master ~]# kubectl explain --help
+List the fields for supported resources
+
+
+  * all
+  * certificatesigningrequests (aka 'csr')
+  * clusterrolebindings
+  * clusterroles
+  * componentstatuses (aka 'cs')
+  * configmaps (aka 'cm')
+  * controllerrevisions
+  * cronjobs
+  * customresourcedefinition (aka 'crd')
+  * daemonsets (aka 'ds')
+  * deployments (aka 'deploy')
+  * endpoints (aka 'ep')
+  * events (aka 'ev')
+  * horizontalpodautoscalers (aka 'hpa')
+  * ingresses (aka 'ing')
+  * jobs
+  * limitranges (aka 'limits')
+  * namespaces (aka 'ns')
+  * networkpolicies (aka 'netpol')
+  * nodes (aka 'no')
+  * persistentvolumeclaims (aka 'pvc')
+  * persistentvolumes (aka 'pv')
+  * poddisruptionbudgets (aka 'pdb')
+  * podpreset
+  * pods (aka 'po')
+  * podsecuritypolicies (aka 'psp')
+  * podtemplates
+  * replicasets (aka 'rs')
+  * replicationcontrollers (aka 'rc')
+  * resourcequotas (aka 'quota')
+  * rolebindings
+  * roles
+  * secrets
+  * serviceaccounts (aka 'sa')
+  * services (aka 'svc')
+  * statefulsets (aka 'sts')
+  * storageclasses (aka 'sc')
+
+Examples:
+  # Get the documentation of the resource and its fields
+  kubectl explain pods
+
+  # Get the documentation of a specific field of a resource
+  kubectl explain pods.spec.containers
+
+Options:
+      --api-version='': Get different explanations for particular API version
+      --include-extended-apis=true: If true, include definitions of new APIs via calls to the API server. [default true]
+      --recursive=false: Print the fields of fields (Currently only 1 level deep)
+
+Usage:
+  kubectl explain RESOURCE [options]
+
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+
+
+
+[root@master ~]# kubectl get all
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           3h
+
+NAME                DESIRED   CURRENT   READY     AGE
+rs/nginx-8586cf59   3         3         3         3h
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           3h
+
+NAME                DESIRED   CURRENT   READY     AGE
+rs/nginx-8586cf59   3         3         3         3h
+
+NAME                      READY     STATUS    RESTARTS   AGE
+po/nginx-8586cf59-6mjqg   1/1       Running   0          3h
+po/nginx-8586cf59-j2k2f   1/1       Running   0          3h
+po/nginx-8586cf59-rt8pb   1/1       Running   0          3h
+
+NAME             TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        4h
+svc/nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   3h
+
+对deploy/nginx进行更改
+
+[root@master ~]# kubectl  edit deploy/nginx
+      - image: nginx:1.12
+ 将默认的nginx改为nginx:1.12
+[root@master ~]# kubectl get all
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         4         2            2           3h
+
+NAME                  DESIRED   CURRENT   READY     AGE
+rs/nginx-5fc8fd597f   2         2         0         20s
+rs/nginx-8586cf59     2         2         2         3h
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         4         2            2           3h
+
+NAME                  DESIRED   CURRENT   READY     AGE
+rs/nginx-5fc8fd597f   2         2         0         20s
+rs/nginx-8586cf59     2         2         2         3h
+
+NAME                        READY     STATUS              RESTARTS   AGE
+po/nginx-5fc8fd597f-rvl6h   0/1       ContainerCreating   0          20s
+po/nginx-5fc8fd597f-v6fpc   0/1       ContainerCreating   0          20s
+po/nginx-8586cf59-j2k2f     1/1       Running             0          3h
+po/nginx-8586cf59-rt8pb     1/1       Running             0          3h
+
+NAME             TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        4h
+svc/nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   3h
+
+查看集群信息
+[root@master ~]# kubectl  cluster-info
+Kubernetes master is running at https://192.168.224.142:6443
+kubernetes-dashboard is running at https://192.168.224.142:6443/api/v1/namespaces/kube-system/services/kubernetes-dashboard/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+查看资源详细描述
+  describe       显示一个指定 resource 或者 group 的 resources 详情
+[root@master ~]# kubectl describe po/nginx-5fc8fd597f-rvl6h
+Name:           nginx-5fc8fd597f-rvl6h
+Namespace:      default
+Node:           192.168.224.144/192.168.224.144
+Start Time:     Tue, 18 Sep 2018 15:54:03 +0800
+Labels:         pod-template-hash=1974981539
+                run=nginx
+Annotations:    <none>
+Status:         Running
+IP:             172.17.52.4
+Controlled By:  ReplicaSet/nginx-5fc8fd597f
+Containers:
+  nginx:
+    Container ID:   docker://9661d77f74c8f2d7db900d256db55237a1fd7f17ebead55a2c90ff83131ebecd
+    Image:          nginx:1.12
+    Image ID:       docker-pullable://nginx@sha256:72daaf46f11cc753c4eab981cbf869919bd1fee3d2170a2adeac12400f494728
+    Port:           <none>
+    State:          Running
+      Started:      Tue, 18 Sep 2018 15:54:39 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-vsrks (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-vsrks:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-vsrks
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              15m   default-scheduler         Successfully assigned nginx-5fc8fd597f-rvl6h to 192.168.224.144
+  Normal  SuccessfulMountVolume  15m   kubelet, 192.168.224.144  MountVolume.SetUp succeeded for volume "default-token-vsrks"
+  Normal  Pulling                15m   kubelet, 192.168.224.144  pulling image "nginx:1.12"
+  Normal  Pulled                 14m   kubelet, 192.168.224.144  Successfully pulled image "nginx:1.12"
+  Normal  Created                14m   kubelet, 192.168.224.144  Created container
+  Normal  Started                14m   kubelet, 192.168.224.144  Started container
+事件流程查看
+
+
+[root@master ~]# kubectl get all
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           4h
+
+NAME                  DESIRED   CURRENT   READY     AGE
+rs/nginx-5fc8fd597f   3         3         3         19m
+rs/nginx-8586cf59     0         0         0         4h
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/nginx   3         3         3            3           4h
+
+NAME                  DESIRED   CURRENT   READY     AGE
+rs/nginx-5fc8fd597f   3         3         3         19m
+rs/nginx-8586cf59     0         0         0         4h
+
+NAME                        READY     STATUS    RESTARTS   AGE
+po/nginx-5fc8fd597f-rvl6h   1/1       Running   0          19m
+po/nginx-5fc8fd597f-v6fpc   1/1       Running   0          19m
+po/nginx-5fc8fd597f-wlc7f   1/1       Running   0          19m
+
+NAME             TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        4h
+svc/nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   4h
+
+ 
+
+让其产生日志
+
+[root@master ~]# kubectl logs nginx-5fc8fd597f-v6fpc     这个是通过  [root@master ~]# kubectl get all   查看得来的
+172.17.3.1 - - [18/Sep/2018:08:14:16 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36" "-"
+2018/09/18 08:14:16 [error] 6#6: *1 open() "/usr/share/nginx/html/favicon.ico" failed (2: No such file or directory), client: 172.17.3.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "192.168.224.143:43680", referrer: "http://192.168.224.143:43680/"
+172.17.3.1 - - [18/Sep/2018:08:14:16 +0000] "GET /favicon.ico HTTP/1.1" 404 571 "http://192.168.224.143:43680/" "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36" "-"
+
+进入容器
+[root@master ~]# kubectl exec -it nginx-5fc8fd597f-v6fpc bash
+root@nginx-5fc8fd597f-v6fpc:/#
+
+
+打补丁
+  patch          使用 strategic merge patch 更新一个资源的 field(s)
+[root@master ~]# kubectl patch --help
+Update field(s) of a resource using strategic merge patch, a JSON merge patch, or a JSON patch.
+
+
+替换
+  replace        通过 filename 或者 stdin替换一个资源
+ 
+例如,上面的配置重新编辑一个yaml文件,然后用replace替换
+
+  convert        在不同的 API versions 转换配置文件
+
+更改标签
+  label          更新在这个资源上的 labels
+
+Examples:
+  # Update pod 'foo' with the label 'unhealthy' and the value 'true'.
+  kubectl label pods foo unhealthy=true
+
+  # Update pod 'foo' with the label 'status' and the value 'unhealthy', overwriting any existing value.
+  kubectl label --overwrite pods foo status=unhealthy
+
+  # Update all pods in the namespace
+  kubectl label pods --all status=unhealthy
+
+  # Update a pod identified by the type and name in "pod.json"
+  kubectl label -f pod.json status=unhealthy
+
+  # Update pod 'foo' only if the resource is unchanged from version 1.
+  kubectl label pods foo status=unhealthy --resource-version=1
+
+  # Update pod 'foo' by removing a label named 'bar' if it exists.
+  # Does not require the --overwrite flag.
+  kubectl label pods foo bar-
+
+
+查看标签
+[root@master ~]# kubectl get all -o wide
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/nginx   3         3         3            3           4h        nginx        nginx:1.12   run=nginx
+
+NAME                  DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/nginx-5fc8fd597f   3         3         3         47m       nginx        nginx:1.12   pod-template-hash=1974981539,run=nginx
+rs/nginx-8586cf59     0         0         0         4h        nginx        nginx        pod-template-hash=41427915,run=nginx
+
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/nginx   3         3         3            3           4h        nginx        nginx:1.12   run=nginx
+
+NAME                  DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/nginx-5fc8fd597f   3         3         3         47m       nginx        nginx:1.12   pod-template-hash=1974981539,run=nginx
+rs/nginx-8586cf59     0         0         0         4h        nginx        nginx        pod-template-hash=41427915,run=nginx
+
+NAME                        READY     STATUS    RESTARTS   AGE       IP            NODE
+po/nginx-5fc8fd597f-rvl6h   1/1       Running   0          47m       172.17.52.4   192.168.224.144
+po/nginx-5fc8fd597f-v6fpc   1/1       Running   0          47m       172.17.3.4    192.168.224.143
+po/nginx-5fc8fd597f-wlc7f   1/1       Running   0          47m       172.17.3.5    192.168.224.143
+
+NAME             TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE       SELECTOR
+svc/kubernetes   ClusterIP   10.10.10.1    <none>        443/TCP        5h        <none>
+svc/nginx        NodePort    10.10.10.83   <none>        88:43680/TCP   4h        run=nginx
+
+api支持的版本
+  api-versions   Print the supported API versions on the server, in the form of "group/version"
+[root@master ~]# kubectl api-versions
+admissionregistration.k8s.io/v1beta1
+apiextensions.k8s.io/v1beta1
+apiregistration.k8s.io/v1beta1
+apps/v1
+apps/v1beta1
+apps/v1beta2
+authentication.k8s.io/v1
+authentication.k8s.io/v1beta1
+authorization.k8s.io/v1
+authorization.k8s.io/v1beta1
+autoscaling/v1
+autoscaling/v2beta1
+batch/v1
+batch/v1beta1
+certificates.k8s.io/v1beta1
+events.k8s.io/v1beta1
+extensions/v1beta1
+networking.k8s.io/v1
+policy/v1beta1
+rbac.authorization.k8s.io/v1
+rbac.authorization.k8s.io/v1beta1
+storage.k8s.io/v1
+storage.k8s.io/v1beta1
+v1
+
+
+
+  config         修改 kubeconfig 文件
