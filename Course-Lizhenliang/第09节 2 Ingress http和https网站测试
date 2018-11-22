@@ -1,0 +1,316 @@
+
+Ingress – 部署
+Ingress测试：
+
+创建两个pod
+[root@k8s-master ingress]# kubectl run --image=nginx nginx
+deployment "nginx" created
+
+[root@k8s-master ingress]# kubectl run --image=httpd httpd
+deployment "httpd" created
+
+[root@k8s-master ingress]# kubectl get po
+NAME                                READY     STATUS              RESTARTS   AGE
+httpd-8576c89d7-jd5h6               0/1       ContainerCreating   0          1m
+nginx-8586cf59-kbp85                0/1       ContainerCreating   0          1m
+
+[root@k8s-master ingress]# kubectl expose deployment nginx --port=80
+service "nginx" exposed
+
+[root@k8s-master ingress]# kubectl expose deployment httpd --port=80
+service "httpd" exposed
+
+
+
+
+[root@k8s-master ingress]# kubectl get po
+NAME                                READY     STATUS    RESTARTS   AGE
+httpd-8576c89d7-jd5h6               1/1       Running   0          10m
+nginx-8586cf59-kbp85                1/1       Running   0          10m
+
+[root@k8s-master ingress]# kubectl exec -it httpd-8576c89d7-jd5h6 bash
+
+root@httpd-8576c89d7-jd5h6:/usr/local/apache2# echo "hello httpd!" >  htdocs/index.html
+
+[root@k8s-master ingress]# kubectl exec -it nginx-8586cf59-kbp85 bash
+
+root@nginx-8586cf59-kbp85:/# echo "hello nginx!" > /usr/share/nginx/html/index.html
+
+[root@k8s-master ingress]# kubectl get svc -o wide
+NAME            TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE       SELECTOR
+httpd           ClusterIP   10.10.10.96   <none>        80/TCP    49s       run=httpd
+nginx           ClusterIP   10.10.10.57   <none>        80/TCP    55s       run=nginx
+
+用集群ip到节点上访问
+[root@k8s-node-1 ~]# curl 10.10.10.96
+hello httpd!
+ 
+[root@k8s-node-1 ~]# curl 10.10.10.57
+hello nginx!
+
+
+cat << EOF > http.yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: httpd-test
+spec:
+  rules:
+  - host: foo.bar.com
+    http:
+      paths:
+      - backend:
+          serviceName: httpd
+          servicePort: 80
+  - host: bar.baz.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx
+          servicePort: 80
+EOF
+
+
+[root@k8s-master ingress]# kubectl create -f http.yaml
+ingress "httpd-test" created
+
+
+[root@k8s-master ingress]# kubectl get  ingress
+NAME         HOSTS                     ADDRESS   PORTS     AGE
+httpd-test   foo.bar.com,bar.baz.com             80        1m
+
+到本机C:\Windows\System32\drivers\etc\ HOSTS 添加主机记录
+
+192.168.224.143 foo.bar.com
+192.168.224.143 bar.baz.com
+
+ 
+ 
+
+
+[root@k8s-master ingress]# kubectl get pods -n ingress-nginx -o wide
+NAME                                        READY     STATUS    RESTARTS   AGE       IP                NODE
+default-http-backend-76f4674c8c-7gqgq       1/1       Running   0          2h        172.17.62.5       192.168.224.144
+nginx-ingress-controller-7c99fb4584-xrjxt   1/1       Running   0          1h        192.168.224.143   192.168.224.143
+nginx-ingress-controller-7c99fb4584-zsgzv   1/1       Running   0          1h        192.168.224.144   192.168.224.144
+[root@k8s-master ingress]# kubectl exec -it nginx-ingress-controller-7c99fb4584-xrjxt bash -n ingress-nginx
+
+root@k8s-node-1:/etc/nginx# cat /etc/nginx/nginx.conf
+
+
+修改配置
+
+[root@k8s-master ingress]# cat deployment.yaml
+ 
+  replicas: 1
+
+重新替换配置
+kubectl replace -f deployment.yaml
+
+
+[root@k8s-master ingress]# kubectl get po -o wide
+NAME                                READY     STATUS    RESTARTS   AGE       IP            NODE
+httpd-8576c89d7-jd5h6               1/1       Running   0          1h        172.17.64.7   192.168.224.143
+nginx-8586cf59-kbp85                1/1       Running   0          1h        172.17.64.6   192.168.224.143
+
+
+此时如果hosts设为192.168.224.144，那么将无法访问
+192.168.224.144 foo.bar.com
+192.168.224.144 bar.baz.com
+
+解决的办法是，每个节点增加一个控制器
+
+[root@k8s-master ingress]# kubectl scale --replicas=2 deploy/nginx-ingress-controller -n ingress-nginx
+deployment "nginx-ingress-controller" scaled
+
+[root@k8s-master ingress]# kubectl get po -o wide -n ingress-nginx
+NAME                                        READY     STATUS    RESTARTS   AGE       IP                NODE
+default-http-backend-76f4674c8c-7gqgq       1/1       Running   0          2h        172.17.62.5       192.168.224.144
+nginx-ingress-controller-7c99fb4584-8hwh9   1/1       Running   0          53s       192.168.224.144   192.168.224.144
+nginx-ingress-controller-7c99fb4584-xrjxt   1/1       Running   0          1h        192.168.224.143   192.168.224.143
+
+
+此时再把hosts 改为
+192.168.224.144 foo.bar.com
+192.168.224.144 bar.baz.com
+
+之前是不能访问的，现在能了
+
+Ingress – 部署
+Ingress TLS 测试：
+
+自创证书
+[root@k8s-master ~]# mkdir https
+[root@k8s-master ~]# cd https/
+[root@k8s-master https]# cfssl print-defaults csr > ca-csr.json
+
+修改文件
+[root@k8s-master https]# vim ca-csr.json
+
+
+{
+    "CN": "hx",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CN",
+            "L": "Beijing",
+            "ST": "Beijing"
+        }
+    ]
+}
+
+[root@k8s-master https]# cfssl print-defaults config > ca-config.json
+
+[root@k8s-master https]# cfssl gencert --initca ca-csr.json | cfssljson -bare ca -
+2018/09/26 23:18:09 [INFO] generating a new CA key and certificate from CSR
+2018/09/26 23:18:09 [INFO] generate received request
+2018/09/26 23:18:09 [INFO] received CSR
+2018/09/26 23:18:09 [INFO] generating key: rsa-2048
+2018/09/26 23:18:09 [INFO] encoded CSR
+2018/09/26 23:18:09 [INFO] signed certificate with serial number 456097036289797395356647078011203797761378527487
+
+
+[root@k8s-master https]# ls
+ca-config.json  ca.csr  ca-csr.json  ca-key.pem  ca.pem
+
+现在为网站生成证书
+[root@k8s-master https]# cfssl print-defaults csr > server-csr.json
+
+[root@k8s-master https]# vim server-csr.json
+
+{
+    "CN": "www.aliangedu.com",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CN",
+            "L": "Beijing",
+            "ST": "Beijing"
+        }
+    ]
+}
+
+[root@k8s-master https]# cfssl gencert -ca=ca.pem -ca-key=ca-key.pem --config=ca-config.json --profile=www server-csr.json | cfssljson -bare server
+2018/09/26 23:32:33 [INFO] generate received request
+2018/09/26 23:32:33 [INFO] received CSR
+2018/09/26 23:32:33 [INFO] generating key: rsa-2048
+2018/09/26 23:32:33 [INFO] encoded CSR
+2018/09/26 23:32:33 [INFO] signed certificate with serial number 17604984520277629664038013271063167532279901423
+2018/09/26 23:32:33 [WARNING] This certificate lacks a "hosts" field. This makes it unsuitable for
+websites. For more information see the Baseline Requirements for the Issuance and Management
+of Publicly-Trusted Certificates, v.1.1.6, from the CA/Browser Forum (https://cabforum.org);
+specifically, section 10.2.3 ("Information Requirements").
+
+[root@k8s-master https]# ls
+ca-config.json  ca.csr  ca-csr.json  ca-key.pem  ca.pem  server.csr  server-csr.json  server-key.pem  server.pem
+
+用server-key.pem  server.pem就可以做https了
+
+步骤：
+1、将上面两个文件导入集群管理中
+[root@k8s-master https]# kubectl create secret tls aliangedu-https --key server-key.pem --cert server.pem
+secret "aliangedu-https" created
+
+[root@k8s-master https]# kubectl get secret
+NAME                  TYPE                                  DATA      AGE
+aliangedu-https       kubernetes.io/tls                     2         45s
+
+2、如何使用
+
+[root@k8s-master https]# cd ../ingress/
+
+cat << EOF> https.yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: https-test
+spec:
+  tls:
+  - hosts:
+    - www.aliangedu.com
+    secretName: aliangedu-https
+  rules:
+  - host: www.aliangedu.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx
+          servicePort: 80
+EOF
+
+[root@k8s-master ingress]# kubectl create -f https.yaml
+ingress "https-test" created
+
+ 
+[root@k8s-master ingress]# kubectl get ing
+NAME         HOSTS                     ADDRESS   PORTS     AGE
+httpd-test   foo.bar.com,bar.baz.com             80        1h
+https-test   www.aliangedu.com                   80, 443   46s
+
+
+注意：以下黄色部分必须要一致
+[root@k8s-master ingress]# kubectl get secret
+NAME                  TYPE                                  DATA      AGE
+aliangedu-https       kubernetes.io/tls                     2         12m
+ 
+[root@k8s-master ingress]# cat https.yaml
+ 
+    secretName: aliangedu-https   少了一个a，导致证书无法使用
+   
+ 
+
+ 
+
+
+[root@k8s-master ingress]#  kubectl get po -n ingress-nginx
+NAME                                        READY     STATUS    RESTARTS   AGE
+default-http-backend-76f4674c8c-7gqgq       1/1       Running   0          3h
+nginx-ingress-controller-7c99fb4584-8hwh9   1/1       Running   0          1h
+nginx-ingress-controller-7c99fb4584-xrjxt   1/1       Running   0          2h
+
+[root@k8s-master ingress]# kubectl exec -it nginx-ingress-controller-7c99fb4584-8hwh9 bash -n ingress-nginx
+
+
+ root@k8s-node-2:/etc/nginx# cat  /etc/nginx/nginx.conf | grep -C 10 www.aliangedu.com
+
+	## start server www.aliangedu.com
+	server {
+		server_name www.aliangedu.com ;
+
+		listen 80;
+
+		listen [::]:80;
+
+		set $proxy_upstream_name "-";
+
+		listen 443  ssl http2;
+
+		listen [::]:443  ssl http2;
+--
+			proxy_next_upstream                     error timeout;
+			proxy_next_upstream_tries               3;
+
+			proxy_pass http://upstream_balancer;
+
+			proxy_redirect                          off;
+
+		}
+
+	}
+	
+通过ingress发布应用，
+ 
+用户--访问节点上的nginx，转发到后端的pod，http，https都可以，七层四层都可以实现，利用nginx做负载均衡，Ingress Controller是做service后端节点的实时更新。
+ 
+这种形式对外发布肯定需要统一入口
+在四层挂了一个slb，代理每个node节点上的ingress controler，从而实现企业级别的k8s应用。
+
+
+
