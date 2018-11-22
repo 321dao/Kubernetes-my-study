@@ -1,0 +1,134 @@
+Service – 发布服务
+服务类型：
+ ClusterIP
+分配一个内部集群IP地址，只能在集群内部访问（同Namespace内的Pod），默认ServiceType。
+ NodePort
+分配一个内部集群IP地址，并在每个节点上启用一个端口来暴露服务，可以在集群外部访问。
+访问地址：<NodeIP>:<NodePort>
+ LoadBalancer
+分配一个内部集群IP地址，并在每个节点上启用一个端口来暴露服务。
+除此之外，Kubernetes会请求底层云平台上的负载均衡器，将每个Node（[NodeIP]:[NodePort]）作为后端添加进去。
+
+[root@Master01 busybox]# kubectl get svc
+NAME           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+expose-nginx   NodePort    10.254.158.168   <none>        88:37570/TCP   6h
+kubernetes     ClusterIP   10.254.0.1       <none>        443/TCP        4d
+nginx-ds       NodePort    10.254.45.130    <none>        80:24064/TCP   4d
+
+[root@Master01 busybox]# kubectl get po
+NAME                               READY     STATUS    RESTARTS   AGE
+busybox                            1/1       Running   0          27m
+nginx-ds-drf7c                     1/1       Running   9          4d
+nginx-ds-kr8zt                     1/1       Running   9          4d
+nginx-ds-xgs9f                     1/1       Running   8          4d
+nginx-hx-deploy-58d6d6ccb8-l2nqz   1/1       Running   1          6h
+nginx-hx-deploy-58d6d6ccb8-lmptp   1/1       Running   1          6h
+nginx-hx-deploy-58d6d6ccb8-pfd4k   1/1       Running   1          6h
+nginx-pod                          1/1       Running   2          5h
+
+[root@Master01 busybox]# kubectl logs nginx-pod -f
+172.30.45.1 - - [22/Sep/2018:08:47:51 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.45.1 - - [22/Sep/2018:08:48:01 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.45.1 - - [22/Sep/2018:08:48:11 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.45.1 - - [22/Sep/2018:08:48:21 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.45.1 - - [22/Sep/2018:08:48:31 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.45.1 - - [22/Sep/2018:08:48:41 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+
+
+
+[root@Master01 nginx]# vim nginx-deployment.yaml
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: default  #还可以加这些
+  labels:
+    web: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.10
+          ports:
+          - containerPort: 80
+
+
+
+[root@Master01 nginx]# vim nginx-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+  type: NodePort
+
+[root@Master01 nginx]# kubectl create  -f nginx-deployment.yaml
+deployment "nginx-deployment" created
+
+[root@Master01 nginx]# kubectl create -f nginx-service.yaml
+service "nginx-service" created
+
+
+[root@Master01 nginx]# kubectl get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+expose-nginx    NodePort    10.254.158.168   <none>        88:37570/TCP   6h
+kubernetes      ClusterIP   10.254.0.1       <none>        443/TCP        4d
+nginx-ds        NodePort    10.254.45.130    <none>        80:24064/TCP   4d
+nginx-service   NodePort    10.254.249.67    <none>        80:29575/TCP   59s
+
+去节点上访问，master节点如果部署了flanneld网络的话也可以访问
+[root@Node01 ~]# curl 10.254.249.67
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+
+
+ 
+
+端口29575是nginx-service的端口
+nginx-service   NodePort    10.254.249.67    <none>        80:29575/TCP   59s
+
+LoadBalancer
+分配一个内部集群IP地址，并在每个节点上启用一个端口来暴露服务。
+除此之外，Kubernetes会请求底层云平台上的负载均衡器，将每个Node（[NodeIP]:[NodePort]）作为后端添加进去。
+ 
+ 
