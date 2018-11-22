@@ -1,0 +1,194 @@
+Pod管理 – 健康检查
+提供 Probe 机制，有以下两种类型：
+ livenessProbe   liveness 活力; 有生命的性质或状态  Probe 探查
+如果检查失败，将杀死容器，根据Pod的restartPolicy来操作。
+ readinessProbe	 readiness准备就绪
+如果检查失败，Kubernetes会把Pod从service endpoints中剔除。
+Probe 支持以下三种检查方法：
+ httpGet
+发送HTTP请求，返回200-400范围状态码为成功。
+ exec
+执行Shell命令返回状态码是0为成功。
+ tcpSocket
+发起TCP Socket建立成功。
+
+示例：
+
+[root@Master01 pod]# vim pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /index.html
+        port: 80
+
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod" created
+
+[root@Master01 pod]# kubectl get pods
+NAME                               READY     STATUS    RESTARTS   AGE
+nginx-ds-drf7c                     1/1       Running   7          4d
+nginx-ds-kr8zt                     1/1       Running   7          4d
+nginx-ds-xgs9f                     1/1       Running   6          4d
+nginx-hx-deploy-58d6d6ccb8-c7l5l   1/1       Running   1          4h
+nginx-hx-deploy-58d6d6ccb8-g2xbd   1/1       Running   1          4h
+nginx-hx-deploy-58d6d6ccb8-nsq7j   1/1       Running   1          4h
+nginx-pod                          1/1       Running   0          29s
+
+[root@Master01 pod]# kubectl describe pod nginx-pod
+Name:         nginx-pod
+Namespace:    default
+Node:         192.168.224.184/192.168.224.184
+Start Time:   Fri, 21 Sep 2018 20:19:12 +0800
+Labels:       app=nginx
+Annotations:  <none>
+Status:       Running
+IP:           172.30.66.6
+Containers:
+  nginx:
+    Container ID:   docker://930f9bfbac6f47fc9e732492ada0bd8ccd2f64793bd3ec9badefae1431470772
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+    Port:           80/TCP
+    State:          Running
+      Started:      Fri, 21 Sep 2018 20:19:21 +0800
+    Ready:          True
+    Restart Count:  0
+    Liveness:       http-get http://:80/index.html delay=0s timeout=1s period=10s #success=1 #failure=3
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-fvtvz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-fvtvz
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              2m    default-scheduler         Successfully assigned nginx-pod to 192.168.224.184
+  Normal  SuccessfulMountVolume  1m    kubelet, 192.168.224.184  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+  Normal  Pulling                1m    kubelet, 192.168.224.184  pulling image "nginx"
+  Normal  Pulled                 1m    kubelet, 192.168.224.184  Successfully pulled image "nginx"
+  Normal  Created                1m    kubelet, 192.168.224.184  Created container
+  Normal  Started                1m    kubelet, 192.168.224.184  Started container
+
+
+查看日志会发现不断地请求
+[root@Master01 pod]# kubectl logs nginx-pod
+172.30.66.1 - - [21/Sep/2018:12:19:28 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:19:38 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:19:48 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:19:58 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:20:08 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:20:18 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:20:28 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:20:38 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+172.30.66.1 - - [21/Sep/2018:12:20:48 +0000] "GET /index.html HTTP/1.1" 200 612 "-" "kube-probe/1.9" "-"
+
+
+进入容器删除index.html
+[root@Master01 pod]# kubectl exec -it nginx-pod bash
+root@nginx-pod:/# rm /usr/share/nginx/html/index.html  -f
+
+查看日志
+172.30.66.1 - - [21/Sep/2018:12:28:38 +0000] "GET /index.html HTTP/1.1" 404 169 "-" "kube-probe/1.9" "-"
+开始报404错误了
+
+看看事件中做了什么处理
+[root@Master01 pod]# kubectl describe po nginx-pod
+Name:         nginx-pod
+Namespace:    default
+Node:         192.168.224.184/192.168.224.184
+Start Time:   Fri, 21 Sep 2018 20:19:12 +0800
+Labels:       app=nginx
+Annotations:  <none>
+Status:       Running
+IP:           172.30.66.6
+Containers:
+  nginx:
+    Container ID:   docker://7c34e8b2fc5324c47df811fb46d2d9078949e76f89e2f409127b7b111da05136
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+    Port:           80/TCP
+    State:          Running
+      Started:      Fri, 21 Sep 2018 20:28:51 +0800
+    Last State:     Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Fri, 21 Sep 2018 20:19:21 +0800
+      Finished:     Fri, 21 Sep 2018 20:28:48 +0800
+    Ready:          True
+    Restart Count:  1
+    Liveness:       http-get http://:80/index.html delay=0s timeout=1s period=10s #success=1 #failure=3
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-fvtvz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-fvtvz
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type     Reason                 Age               From                      Message
+  ----     ------                 ----              ----                      -------
+  Normal   Scheduled              11m               default-scheduler         Successfully assigned nginx-pod to 192.168.224.184
+  Normal   SuccessfulMountVolume  11m               kubelet, 192.168.224.184  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+  Warning  Unhealthy              2m (x3 over 2m)   kubelet, 192.168.224.184  Liveness probe failed: HTTP probe failed with statuscode: 404
+  Normal   Pulling                2m (x2 over 11m)  kubelet, 192.168.224.184  pulling image "nginx"
+  Normal   Killing                2m                kubelet, 192.168.224.184  Killing container with id docker://nginx:Container failed liveness probe.. Container will be killed and recreated.
+  Normal   Pulled                 2m (x2 over 11m)  kubelet, 192.168.224.184  Successfully pulled image "nginx"
+  Normal   Created                2m (x2 over 11m)  kubelet, 192.168.224.184  Created container
+  Normal   Started                2m (x2 over 11m)  kubelet, 192.168.224.184  Started container
+
+[root@Master01 pod]# kubectl -h
+  explain        查看资源的文档
+
+[root@Master01 pod]# kubectl explain -h
+  kubectl explain pods.spec.containers
+
+[root@Master01 pod]#   kubectl explain pods.spec.containers
+
+   livenessProbe	<Object>
+     Periodic probe of container liveness. Container will be restarted if the
+     probe fails. Cannot be updated. More info:
+     https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+
+   readinessProbe	<Object>
+     Periodic probe of container service readiness. Container will be removed
+     from service endpoints if the probe fails. Cannot be updated. More info:
+     https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+链接有案例模板
+
+Pod管理 – 问题定位
+kubectl describe TYPE NAME_PREFIX
+kubectl logs nginx-xxx
+kubectl exec –it nginx-xxx bash
+
