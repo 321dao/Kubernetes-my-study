@@ -1,0 +1,757 @@
+故障排查
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           23m
+deploy/nginx     3         3         3            3           42m
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         23m
+rs/nginx-f95d765f9      3         3         3         42m
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           23m
+deploy/nginx     3         3         3            3           42m
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         23m
+rs/nginx-f95d765f9      3         3         3         42m
+
+NAME                          READY     STATUS             RESTARTS   AGE
+po/busybox-5d4f595646-76b6n   0/1       CrashLoopBackOff   8          23m
+po/nginx-f95d765f9-5rs4s      1/1       Running            0          42m
+po/nginx-f95d765f9-btnbl      1/1       Running            0          42m
+po/nginx-f95d765f9-s2frq      1/1       Running            0          42m
+
+NAME                TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes      ClusterIP   10.10.10.1    <none>        443/TCP        12h
+svc/nginx-service   NodePort    10.10.10.24   <none>        88:35447/TCP   18m
+
+
+[root@k8s-master ~]# kubectl describe po/nginx-f95d765f9-btnbl
+Name:           nginx-f95d765f9-btnbl
+Namespace:      default
+Node:           192.168.224.143/192.168.224.143
+Start Time:     Wed, 19 Sep 2018 09:42:59 +0800
+Labels:         app=nginx-example
+                pod-template-hash=951832195
+Annotations:    <none>
+Status:         Running
+IP:             172.17.3.5
+Controlled By:  ReplicaSet/nginx-f95d765f9
+Containers:
+  nginx:
+    Container ID:   docker://bea13d7f648a4c758052740c8805537d8a2aac76712d27186cdc99488579dbdf
+    Image:          nginx:1.10
+    Image ID:       docker-pullable://nginx@sha256:6202beb06ea61f44179e02ca965e8e13b961d12640101fca213efbfd145d7575
+    Port:           80/TCP
+    State:          Running
+      Started:      Wed, 19 Sep 2018 09:43:11 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-vsrks (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-vsrks:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-vsrks
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type     Reason                 Age                 From                      Message
+  ----     ------                 ----                ----                      -------
+  Warning  FailedScheduling       37m (x26 over 43m)  default-scheduler         0/2 nodes are available: 2 NodeNotReady.
+  Normal   SuccessfulMountVolume  34m                 kubelet, 192.168.224.143  MountVolume.SetUp succeeded for volume "default-token-vsrks"
+  Normal   Pulled                 34m                 kubelet, 192.168.224.143  Container image "nginx:1.10"already present on machine
+  Normal   Created                34m                 kubelet, 192.168.224.143  Created container
+  Normal   Started                34m                 kubelet, 192.168.224.143  Started container
+
+
+
+
+[root@k8s-master ~]# kubectl describe deploy/nginx
+Name:                   nginx
+Namespace:              default
+CreationTimestamp:      Wed, 19 Sep 2018 09:33:44 +0800
+Labels:                 app=nginx-example
+Annotations:            deployment.kubernetes.io/revision=1
+Selector:               app=nginx-example
+Replicas:               3 desired | 3 updated | 3 total | 3 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  1 max unavailable, 1 max surge
+Pod Template:
+  Labels:  app=nginx-example
+  Containers:
+   nginx:
+    Image:        nginx:1.10
+    Port:         80/TCP
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      True    MinimumReplicasAvailable
+OldReplicaSets:  <none>
+NewReplicaSet:   nginx-f95d765f9 (3/3 replicas created)
+Events:          <none>
+
+
+
+[root@k8s-master ~]# kubectl describe svc
+Name:              kubernetes
+Namespace:         default
+Labels:            component=apiserver
+                   provider=kubernetes
+Annotations:       <none>
+Selector:          <none>
+Type:              ClusterIP
+IP:                10.10.10.1
+Port:              https  443/TCP
+TargetPort:        6443/TCP
+Endpoints:         192.168.224.142:6443
+Session Affinity:  ClientIP
+Events:            <none>
+
+
+Name:                     nginx-service
+Namespace:                default
+Labels:                   app=nginx-example
+Annotations:              <none>
+Selector:                 app=nginx-example
+Type:                     NodePort
+IP:                       10.10.10.24
+Port:                     <unset>  88/TCP
+TargetPort:               80/TCP
+NodePort:                 <unset>  35447/TCP
+Endpoints:                172.17.3.3:80,172.17.3.4:80,172.17.3.5:80
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+
+
+[root@k8s-master ~]# kubectl describe svc/nginx-service
+Name:                     nginx-service
+Namespace:                default
+Labels:                   app=nginx-example
+Annotations:              <none>
+Selector:                 app=nginx-example
+Type:                     NodePort
+IP:                       10.10.10.24
+Port:                     <unset>  88/TCP
+TargetPort:               80/TCP
+NodePort:                 <unset>  35447/TCP
+Endpoints:                172.17.3.3:80,172.17.3.4:80,172.17.3.5:80
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+
+
+[root@k8s-master ~]# kubectl  get pods -o wide
+NAME                       READY     STATUS             RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-76b6n   0/1       CrashLoopBackOff   18         1h        172.17.52.2   192.168.224.144
+nginx-f95d765f9-5rs4s      1/1       Running            0          1h        172.17.3.4    192.168.224.143
+nginx-f95d765f9-btnbl      1/1       Running            0          1h        172.17.3.5    192.168.224.143
+nginx-f95d765f9-s2frq      1/1       Running            0          1h        172.17.3.3    192.168.224.143
+
+
+[root@k8s-master ~]# kubectl  get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+busybox-5d4f595646-76b6n   1/1       Running   19         1h
+nginx-f95d765f9-5rs4s      1/1       Running   0          1h
+nginx-f95d765f9-btnbl      1/1       Running   0          1h
+nginx-f95d765f9-s2frq      1/1       Running   0          1h
+ 
+[root@k8s-master ~]# kubectl  logs nginx-f95d765f9-btnbl
+192.168.224.143 - - [19/Sep/2018:01:58:35 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+
+
+进入容器
+[root@k8s-master ~]# kubectl exec -it nginx-f95d765f9-btnbl bash
+root@nginx-f95d765f9-btnbl:/#
+
+ 
+
+升级 
+[root@k8s-master ~]# kubectl set -h
+Configure application resources
+
+These commands help you make changes to existing application resources.
+
+Available Commands:
+  env            Update environment variables on a pod template
+  image          更新一个 pod template 的镜像
+  resources      在对象的 pod templates 上更新资源的 requests/limits
+  selector       设置 resource 的 selector
+  serviceaccount Update ServiceAccount of a resource
+  subject        Update User, Group or ServiceAccount in a RoleBinding/ClusterRoleBinding
+
+Usage:
+  kubectl set SUBCOMMAND [options]
+
+Use "kubectl <command> --help" for more information about a given command.
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+
+
+
+更新镜像
+[root@k8s-master ~]# kubectl set image -h
+Update existing container image(s) of resources.
+
+Possible resources include (case insensitive):
+
+  pod (po), replicationcontroller (rc), deployment (deploy), daemonset (ds), replicaset (rs)
+
+Examples:
+  # Set a deployment's nginx container image to 'nginx:1.9.1', and its busybox container image to
+'busybox'.
+  kubectl set image deployment/nginx busybox=busybox nginx=nginx:1.9.1
+
+  # Update all deployments' and rc's nginx container's image to 'nginx:1.9.1'
+  kubectl set image deployments,rc nginx=nginx:1.9.1 --all
+
+  # Update image of all containers of daemonset abc to 'nginx:1.9.1'
+  kubectl set image daemonset abc *=nginx:1.9.1
+
+  # Print result (in yaml format) of updating nginx container image from local file, without hitting
+the server
+  kubectl set image -f path/to/file.yaml nginx=nginx:1.9.1 --local -o yaml
+
+
+
+[root@k8s-master ~]# kubectl  set image deployment/nginx  nginx=nginx:1.11
+deployment "nginx" image updated
+
+
+[root@k8s-master ~]# kubectl get pods
+NAME                       READY     STATUS              RESTARTS   AGE
+busybox-5d4f595646-76b6n   1/1       Running             21         1h
+nginx-76c4c6d6d8-577x8     1/1       Running             0          32s
+nginx-76c4c6d6d8-5fxwj     1/1       Running             0          32s
+nginx-76c4c6d6d8-gh6hj     0/1       ContainerCreating   0          9s
+nginx-f95d765f9-s2frq      0/1       Terminating         0          1h
+
+
+[root@k8s-master ~]# kubectl get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+busybox-5d4f595646-mnhfp   1/1       Running   3          2m
+nginx-76c4c6d6d8-577x8     1/1       Running   0          38m
+nginx-76c4c6d6d8-5fxwj     1/1       Running   0          38m
+nginx-76c4c6d6d8-gh6hj     1/1       Running   0          38m
+ 
+[root@k8s-master ~]# kubectl describe pod  nginx-76c4c6d6d8-577x8
+Name:           nginx-76c4c6d6d8-577x8
+Namespace:      default
+Node:           192.168.224.144/192.168.224.144
+Start Time:     Wed, 19 Sep 2018 11:25:31 +0800
+Labels:         app=nginx-example
+                pod-template-hash=3270728284
+Annotations:    <none>
+Status:         Running
+IP:             172.17.52.3
+Controlled By:  ReplicaSet/nginx-76c4c6d6d8
+Containers:
+  nginx:
+    Container ID:   docker://3ef9e208f5d74d1dd5c0ba31d9f61af7fa8cda437d9b3964bbbc37dcf44e3de8
+    Image:          nginx:1.11
+    Image ID:       docker-pullable://nginx@sha256:e6693c20186f837fc393390135d8a598a96a833917917789d63766cab6c59582
+    Port:           80/TCP
+    State:          Running
+      Started:      Wed, 19 Sep 2018 11:25:53 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-vsrks (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-vsrks:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-vsrks
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              39m   default-scheduler         Successfully assigned nginx-76c4c6d6d8-577x8 to 192.168.224.144
+  Normal  SuccessfulMountVolume  39m   kubelet, 192.168.224.144  MountVolume.SetUp succeeded for volume "default-token-vsrks"
+  Normal  Pulling                39m   kubelet, 192.168.224.144  pulling image "nginx:1.11"
+  Normal  Pulled                 38m   kubelet, 192.168.224.144  Successfully pulled image "nginx:1.11"
+  Normal  Created                38m   kubelet, 192.168.224.144  Created container
+
+ 
+
+编辑配置
+[root@k8s-master ~]# kubectl edit -h
+Edit a resource from the default editor.
+
+Examples:
+  # Edit the service named 'docker-registry':
+  kubectl edit svc/docker-registry
+
+  # Use an alternative editor
+  KUBE_EDITOR="nano" kubectl edit svc/docker-registry
+
+  # Edit the job 'myjob' in JSON using the v1 API format:
+  kubectl edit job.v1.batch/myjob -o json
+
+  # Edit the deployment 'mydeployment' in YAML and save the modified config in its annotation:
+  kubectl edit deployment/mydeployment -o yaml --save-config
+
+
+
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            1           2h
+deploy/nginx     3         3         3            3           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         1         2h
+rs/nginx-76c4c6d6d8     3         3         3         44m
+rs/nginx-f95d765f9      0         0         0         2h
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            1           2h
+deploy/nginx     3         3         3            3           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         1         2h
+rs/nginx-76c4c6d6d8     3         3         3         44m
+rs/nginx-f95d765f9      0         0         0         2h
+
+NAME                          READY     STATUS    RESTARTS   AGE
+po/busybox-5d4f595646-mnhfp   1/1       Running   6          8m
+po/nginx-76c4c6d6d8-577x8     1/1       Running   0          44m
+po/nginx-76c4c6d6d8-5fxwj     1/1       Running   0          44m
+po/nginx-76c4c6d6d8-gh6hj     1/1       Running   0          44m
+
+NAME                TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes      ClusterIP   10.10.10.1    <none>        443/TCP        14h
+svc/nginx-service   NodePort    10.10.10.24   <none>        88:35447/TCP   2h
+
+
+
+[root@k8s-master ~]# kubectl edit deploy/nginx
+
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "2"
+  creationTimestamp: 2018-09-19T01:33:44Z
+  generation: 2
+  labels:
+    app: nginx-example
+  name: nginx
+  namespace: default
+  resourceVersion: "48891"
+  selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/nginx
+  uid: 0bc477fc-bbac-11e8-b57e-000c29e344e1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-example
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: nginx-example
+    spec:
+      containers:
+      - image: nginx:1.11  改为1.12
+        imagePullPolicy: IfNotPresent
+        name: nginx
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 3
+  conditions:
+  - lastTransitionTime: 2018-09-19T01:43:12Z
+    lastUpdateTime: 2018-09-19T01:43:12Z
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 2
+  readyReplicas: 3
+  replicas: 3
+  updatedReplicas: 3
+
+
+[root@k8s-master ~]# kubectl  get pods
+NAME                       READY     STATUS             RESTARTS   AGE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   6          11m
+nginx-667655d949-htgmx     1/1       Running            0          53s
+nginx-667655d949-kbnzz     1/1       Running            0          53s
+nginx-667655d949-klhvj     1/1       Running            0          50s
+
+[root@k8s-master ~]# kubectl edit deploy/nginx
+    spec:
+      containers:
+      - image: nginx:1.12  发现已经升级了
+        imagePullPolicy: IfNotPresent
+        name: nginx
+        ports:
+        - containerPort: 80
+
+
+查看升级状态
+[root@k8s-master ~]# kubectl rollout status deploy/nginx
+deployment "nginx" successfully rolled out
+
+查看历史升级版本
+[root@k8s-master ~]# kubectl rollout history deploy/nginx
+deployments "nginx"
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+3         <none>
+
+如果要看到版本号
+[root@k8s-master ~]# kubectl set image deployment/nginx nginx=nginx:1.13 --record
+deployment "nginx" image updated
+
+
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+deploy/nginx     3         3         3            3           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+rs/nginx-667655d949     0         0         0         8m
+rs/nginx-68c5df777d     3         3         3         24s
+rs/nginx-76c4c6d6d8     0         0         0         55m
+rs/nginx-f95d765f9      0         0         0         2h
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+deploy/nginx     3         3         3            3           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+rs/nginx-667655d949     0         0         0         8m
+rs/nginx-68c5df777d     3         3         3         24s
+rs/nginx-76c4c6d6d8     0         0         0         55m
+rs/nginx-f95d765f9      0         0         0         2h
+
+NAME                          READY     STATUS             RESTARTS   AGE
+po/busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   7          19m
+po/nginx-667655d949-klhvj     0/1       Terminating        0          8m
+po/nginx-68c5df777d-cfmpt     1/1       Running            0          5s
+po/nginx-68c5df777d-nbrzn     1/1       Running            0          24s
+po/nginx-68c5df777d-tmvs5     1/1       Running            0          24s
+
+NAME                TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes      ClusterIP   10.10.10.1    <none>        443/TCP        14h
+svc/nginx-service   NodePort    10.10.10.24   <none>        88:35447/TCP   2h
+
+[root@k8s-master ~]# kubectl rollout status  deployment/nginx
+deployment "nginx" successfully rolled out
+
+[root@k8s-master ~]# kubectl rollout history deploy/nginx
+deployments "nginx"
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+3         <none>
+4         kubectl set image deployment/nginx nginx=nginx:1.13 --record=true
+
+确认现在的版本
+[root@k8s-master ~]# kubectl describe po/nginx-68c5df777d-nbrzn | grep 1.1
+    Image:          nginx:1.13
+
+现在要回滚到1.12版本
+[root@k8s-master ~]# kubectl rollout undo deployment/nginx
+deployment "nginx"
+
+
+[root@k8s-master ~]# kubectl rollout -h
+Manage the rollout of a resource.
+
+Valid resource types include:
+
+  * deployments
+  * daemonsets
+  * statefulsets
+
+Examples:
+  # Rollback to the previous deployment
+  kubectl rollout undo deployment/abc
+
+  # Check the rollout status of a daemonset
+  kubectl rollout status daemonset/foo
+
+Available Commands:
+  history     显示 rollout 历史
+  pause       标记提供的 resource 为中止状态
+  resume      继续一个停止的 resource
+  status      显示 rollout 的状态
+  undo        撤销上一次的 rollout
+
+Usage:
+  kubectl rollout SUBCOMMAND [options]
+
+Use "kubectl <command> --help" for more information about a given command.
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+[root@k8s-master ~]# kubectl rollout status deploy/nginx
+deployment "nginx" successfully rolled out
+
+查看历史记录
+[root@k8s-master ~]# kubectl rollout history deploy/nginx
+deployments "nginx"
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+4         kubectl set image deployment/nginx nginx=nginx:1.13 --record=true
+5         <none>
+
+发现少了3，其实3被5替代
+
+[root@k8s-master ~]# kubectl get pods
+NAME                       READY     STATUS             RESTARTS   AGE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   10         32m
+nginx-667655d949-77d5n     1/1       Running            0          5m
+nginx-667655d949-9w4qz     1/1       Running            0          5m
+nginx-667655d949-ftqww     1/1       Running            0          5m
+
+[root@k8s-master ~]# kubectl describe pod  nginx-667655d949-ftqww | grep 1.1
+    Image:          nginx:1.12
+  Normal  Pulled                 6m    kubelet, 192.168.224.143  Container image "nginx:1.12" already present on machine
+
+扩展副本，增加pod数量
+[root@k8s-master ~]# kubectl scale deploy/nginx --replicas=5
+deployment "nginx" scaled
+ 
+[root@k8s-master ~]# kubectl scale -h
+Set a new size for a Deployment, ReplicaSet, Replication Controller, or Job.
+
+Scale also allows users to specify one or more preconditions for the scale action.
+
+If --current-replicas or --resource-version is specified, it is validated before the scale is
+attempted, and it is guaranteed that the precondition holds true when the scale is sent to the
+server.
+
+Examples:
+  # Scale a replicaset named 'foo' to 3.
+  kubectl scale --replicas=3 rs/foo
+
+  # Scale a resource identified by type and name specified in "foo.yaml" to 3.
+  kubectl scale --replicas=3 -f foo.yaml
+
+  # If the deployment named mysql's current size is 2, scale mysql to 3.
+  kubectl scale --current-replicas=2 --replicas=3 deployment/mysql
+
+  # Scale multiple replication controllers.
+  kubectl scale --replicas=5 rc/foo rc/bar rc/baz
+
+  # Scale job named 'cron' to 3.
+  kubectl scale --replicas=3 job/cron
+
+Options:
+      --all=false: Select all resources in the namespace of the specified resource types
+      --current-replicas=-1: Precondition for current size. Requires that the current size of the
+resource match this value in order to scale.
+  -f, --filename=[]: Filename, directory, or URL to files identifying the resource to set a new size
+      --include-extended-apis=true: If true, include definitions of new APIs via calls to the API
+server. [default true]
+  -o, --output='': Output mode. Use "-o name" for shorter output (resource/name).
+      --record=false: Record current kubectl command in the resource annotation. If set to false, do
+not record the command. If set to true, record the command. If not set, default to updating the
+existing annotation value only if one already exists.
+  -R, --recursive=false: Process the directory used in -f, --filename recursively. Useful when you
+want to manage related manifests organized within the same directory.
+      --replicas=-1: The new desired number of replicas. Required.
+      --resource-version='': Precondition for resource version. Requires that the current resource
+version match this value in order to scale.
+  -l, --selector='': Selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l
+key1=value1,key2=value2)
+      --timeout=0s: The length of time to wait before giving up on a scale operation, zero means
+don't wait. Any other values should contain a corresponding time unit (e.g. 1s, 2m, 3h).
+
+Usage:
+  kubectl scale [--resource-version=version] [--current-replicas=count] --replicas=COUNT (-f
+FILENAME | TYPE NAME) [options]
+
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+
+
+[root@k8s-master ~]# kubectl  get pods -o wide
+NAME                       READY     STATUS             RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   11         38m       172.17.3.3    192.168.224.143
+nginx-667655d949-77d5n     1/1       Running            0          11m       172.17.52.2   192.168.224.144
+nginx-667655d949-9w4qz     1/1       Running            0          11m       172.17.3.4    192.168.224.143
+nginx-667655d949-ftqww     1/1       Running            0          11m       172.17.3.5    192.168.224.143
+nginx-667655d949-h29td     1/1       Running            0          2m        172.17.52.4   192.168.224.144
+nginx-667655d949-vcvq2     1/1       Running            0          2m        172.17.52.3   192.168.224.144
+
+创建十个
+[root@k8s-master ~]# kubectl scale deploy/nginx --replicas=10
+deployment "nginx" scaled
+
+[root@k8s-master ~]# kubectl  get pods -o wide
+NAME                       READY     STATUS              RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff    11         39m       172.17.3.3    192.168.224.143
+nginx-667655d949-77d5n     1/1       Running             0          12m       172.17.52.2   192.168.224.144
+nginx-667655d949-9w4qz     1/1       Running             0          12m       172.17.3.4    192.168.224.143
+nginx-667655d949-ftqww     1/1       Running             0          12m       172.17.3.5    192.168.224.143
+nginx-667655d949-gqq89     1/1       Running             0          2s        172.17.52.5   192.168.224.144
+nginx-667655d949-h29td     1/1       Running             0          3m        172.17.52.4   192.168.224.144
+nginx-667655d949-qkk9n     0/1       ContainerCreating   0          2s        <none>        192.168.224.143
+nginx-667655d949-stjnm     0/1       ContainerCreating   0          2s        <none>        192.168.224.143
+nginx-667655d949-tgcl8     0/1       ContainerCreating   0          2s        <none>        192.168.224.143
+nginx-667655d949-vcvq2     1/1       Running             0          3m        172.17.52.3   192.168.224.144
+nginx-667655d949-zcs7h     1/1       Running             0          2s        172.17.52.6   192.168.224.144
+
+减少pod数量
+
+[root@k8s-master ~]# kubectl scale deploy/nginx --replicas=5
+deployment "nginx" scaled
+
+[root@k8s-master ~]# kubectl  get pods -o wide
+NAME                       READY     STATUS             RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   11         40m       172.17.3.3    192.168.224.143
+nginx-667655d949-77d5n     1/1       Running            0          13m       172.17.52.2   192.168.224.144
+nginx-667655d949-9w4qz     1/1       Running            0          13m       172.17.3.4    192.168.224.143
+nginx-667655d949-ftqww     1/1       Running            0          13m       172.17.3.5    192.168.224.143
+nginx-667655d949-gqq89     1/1       Terminating        0          1m        172.17.52.5   192.168.224.144
+nginx-667655d949-h29td     1/1       Running            0          4m        172.17.52.4   192.168.224.144
+nginx-667655d949-qkk9n     0/1       Terminating        0          1m        172.17.3.7    192.168.224.143
+nginx-667655d949-stjnm     0/1       Terminating        0          1m        172.17.3.8    192.168.224.143
+nginx-667655d949-tgcl8     0/1       Terminating        0          1m        172.17.3.6    192.168.224.143
+nginx-667655d949-vcvq2     1/1       Running            0          4m        172.17.52.3   192.168.224.144
+nginx-667655d949-zcs7h     1/1       Terminating        0          1m        172.17.52.6   192.168.224.144
+
+[root@k8s-master ~]# kubectl  get pods -o wide
+NAME                       READY     STATUS             RESTARTS   AGE       IP            NODE
+busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   11         41m       172.17.3.3    192.168.224.143
+nginx-667655d949-77d5n     1/1       Running            0          14m       172.17.52.2   192.168.224.144
+nginx-667655d949-9w4qz     1/1       Running            0          14m       172.17.3.4    192.168.224.143
+nginx-667655d949-ftqww     1/1       Running            0          14m       172.17.3.5    192.168.224.143
+nginx-667655d949-h29td     1/1       Running            0          5m        172.17.52.4   192.168.224.144
+nginx-667655d949-vcvq2     1/1       Running            0          5m        172.17.52.3   192.168.224.144
+
+
+删除
+[root@k8s-master ~]# kubectl  delete -h
+Delete resources by filenames, stdin, resources and names, or by resources and label selector.
+
+Examples:
+  # Delete a pod using the type and name specified in pod.json.
+  kubectl delete -f ./pod.json
+
+  # Delete a pod based on the type and name in the JSON passed into stdin.
+  cat pod.json | kubectl delete -f -
+
+  # Delete pods and services with same names "baz" and "foo"
+  kubectl delete pod,service baz foo
+
+  # Delete pods and services with label name=myLabel.
+  kubectl delete pods,services -l name=myLabel
+
+  # Delete a pod with minimal delay
+  kubectl delete pod foo --now
+
+  # Force delete a pod on a dead node
+  kubectl delete pod foo --grace-period=0 --force
+
+ 
+
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+deploy/nginx     5         5         5            5           3h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+rs/nginx-667655d949     5         5         5         32m
+rs/nginx-68c5df777d     0         0         0         24m
+rs/nginx-76c4c6d6d8     0         0         0         1h
+rs/nginx-f95d765f9      0         0         0         3h
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+deploy/nginx     5         5         5            5           3h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+rs/nginx-667655d949     5         5         5         32m
+rs/nginx-68c5df777d     0         0         0         24m
+rs/nginx-76c4c6d6d8     0         0         0         1h
+rs/nginx-f95d765f9      0         0         0         3h
+
+NAME                          READY     STATUS             RESTARTS   AGE
+po/busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   12         43m
+po/nginx-667655d949-77d5n     1/1       Running            0          16m
+po/nginx-667655d949-9w4qz     1/1       Running            0          16m
+po/nginx-667655d949-ftqww     1/1       Running            0          16m
+po/nginx-667655d949-h29td     1/1       Running            0          7m
+po/nginx-667655d949-vcvq2     1/1       Running            0          7m
+
+NAME                TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes      ClusterIP   10.10.10.1    <none>        443/TCP        15h
+svc/nginx-service   NodePort    10.10.10.24   <none>        88:35447/TCP   2h
+
+[root@k8s-master ~]# kubectl delete deploy/nginx
+deployment "nginx" deleted
+
+[root@k8s-master ~]# kubectl delete svc/nginx-service
+service "nginx-service" deleted
+
+
+[root@k8s-master ~]# kubectl get all
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+
+NAME             DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/busybox   1         1         1            0           2h
+
+NAME                    DESIRED   CURRENT   READY     AGE
+rs/busybox-5d4f595646   1         1         0         2h
+
+NAME                          READY     STATUS             RESTARTS   AGE
+po/busybox-5d4f595646-mnhfp   0/1       CrashLoopBackOff   12         46m
+
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   15h
