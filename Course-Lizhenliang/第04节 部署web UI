@@ -1,0 +1,440 @@
+部署web UI
+将C:\Users\Administrator\Desktop\k8s刘振良 腾讯课程学习记录\腾讯课程资料\UI   文件拷贝进来
+[root@master ui]# ls
+dashboard-deployment.yaml  dashboard-rbac.yaml  dashboard-service.yaml
+
+
+[root@database-storge web-UI]# ls
+dashboard-deployment.yaml  dashboard-rbac.yaml  dashboard-service.yaml
+dashboard-rbac.yaml  访问权限，涉及到角色
+
+[root@database-storge web-UI]# cat dashboard-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount  使用了这个用户，这是k8s的虚拟用户，是pod访问集群用的，有两种用户，还有一种是user，是给用户用的
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+    addonmanager.kubernetes.io/mode: Reconcile
+  name: kubernetes-dashboard  虚拟账号
+  namespace: kube-system
+---
+
+kind: ClusterRoleBinding  集群绑定角色，将kubernetes-dashboard绑定到组中，使它有这个权限
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: kubernetes-dashboard-minimal
+  namespace: kube-system
+  labels:
+    k8s-app: kubernetes-dashboard
+    addonmanager.kubernetes.io/mode: Reconcile
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole  两种角色，一种是集群角色，对整个集群都起作用，一种是普通角色，仅对单个命名空间起作用
+  name: cluster-admin  角色名称
+subjects:
+  - kind: ServiceAccount  将上面的ServiceAccount绑定到角色中，完成了创建账号并绑定到角色中的过程，使之拥有相应的权限
+    name: kubernetes-dashboard
+    namespace: kube-system
+
+
+[root@master web-UI]# kubectl create -f dashboard-rbac.yaml
+serviceaccount "kubernetes-dashboard" created
+clusterrolebinding "kubernetes-dashboard-minimal" created
+
+
+
+
+[root@master web-UI]#  cat dashboard-deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment  应用服务都是使用这个去创建的
+metadata:
+  name: kubernetes-dashboard
+  namespace: kube-system
+  labels:
+    k8s-app: kubernetes-dashboard
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kubernetes-dashboard
+  template:
+    metadata:
+      labels:
+        k8s-app: kubernetes-dashboard
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+    spec:
+      serviceAccountName: kubernetes-dashboard
+      containers:
+      - name: kubernetes-dashboard
+        image: registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64:v1.7.1
+        resources:
+          limits:
+            cpu: 100m
+            memory: 300Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /
+            port: 9090
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+      tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+
+
+
+
+[root@master web-UI]# cat dashboard-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-dashboard
+  namespace: kube-system
+  labels:
+    k8s-app: kubernetes-dashboard
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  type: NodePort
+  selector:
+    k8s-app: kubernetes-dashboard
+  ports:
+  - port: 80
+    targetPort: 9090
+
+
+[root@master web-UI]# kubectl  create -f dashboard-deployment.yaml
+deployment "kubernetes-dashboard" created
+
+
+[root@master web-UI]# kubectl  create -f dashboard-service.yaml
+service "kubernetes-dashboard" created
+
+
+
+查看
+[root@master web-UI]# kubectl  get all -n kube-system    这是命名空间
+NAME                          DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/kubernetes-dashboard   1         1         1            1           2m
+
+NAME                                 DESIRED   CURRENT   READY     AGE
+rs/kubernetes-dashboard-698bb888c5   1         1         1         2m
+
+NAME                          DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deploy/kubernetes-dashboard   1         1         1            1           2m
+
+NAME                                 DESIRED   CURRENT   READY     AGE
+rs/kubernetes-dashboard-698bb888c5   1         1         1         2m
+
+NAME                                       READY     STATUS    RESTARTS   AGE
+po/kubernetes-dashboard-698bb888c5-jd9pk   1/1       Running   0          2m
+具体的容器
+NAME                       TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+svc/kubernetes-dashboard   NodePort   10.10.10.175   <none>        80:36227/TCP   1m
+10.10.10.175 提供负载均衡的ip，内部通过80访问，类型是NodePort 
+36227随机端口，也可指定
+
+ 
+
+查看有几个命名空间
+[root@master web-UI]# kubectl get ns
+NAME          STATUS    AGE
+default       Active    5h
+kube-public   Active    5h
+kube-system   Active    5h  这个命名空间主要放集群用的东西，如果不指定，就默认是default里
+
+Kubectl介绍
+[root@master web-UI]# kubectl  -s 127.0.0.1:8080 get node
+NAME             STATUS    ROLES     AGE       VERSION
+192.168.224.11   Ready     <none>    6h        v1.9.0
+192.168.224.12   Ready     <none>    6h        v1.9.0
+-s 127.0.0.1:8080  默认是通过这个endpoint去访问的
+
+[root@master web-UI]# netstat -tunlp | grep 6443
+tcp        0      0 192.168.224.10:6443     0.0.0.0:*               LISTEN      2154/kube-apiserver
+6443 访问https的
+
+
+在node节点操作
+[root@node1 bin]# cp /opt/kubernetes/bin/kubelet /usr/bin/
+还需要创建一个kubeconfig配置，是用于kubectl调用配置访问集群
+
+[root@master ~]# ls .kube*
+cache  http-cache
+默认会生成一些缓存放在这个目录下，需要ca证书和创建证书时生成的
+[root@node1 ~]# cd
+[root@node1 ~]# source /etc/profile
+
+[root@master ~]# ls /opt/kubernetes/ssl/adm*
+/opt/kubernetes/ssl/admin-key.pem  /opt/kubernetes/ssl/admin.pem
+
+[root@node1 ~]# cp /opt/kubernetes/ssl/ca.pem /opt/kubernetes/ssl/admin* ./
+
+其实kubectl有命令可以让我们快速生成文件
+# 设置集群项中名为kubernetes的apiserver地址与根证书
+[root@node1 ~]# kubectl config set-cluster kubernetes --server=https://192.168.224.181:6443 --certificate-authority=ca.pem
+Cluster "kubernetes" set.
+
+[root@k8s-node-1 ~]# ls .kube/
+config
+生成了一个配置文件
+
+
+可以通过修改配置文件
+[root@k8s-node-1 ~]# vim .kube/config
+
+apiVersion: v1
+clusters:  通过上面生成命令指定的
+- cluster:
+    certificate-authority: /root/ca.pem
+    server: https://192.168.224.11:6443
+  name: kubernetes
+contexts: []
+current-context: ""
+kind: Config
+preferences: {}
+users: []   这部分的信息在下面命令中指定
+
+ # 设置用户项中cluster-admin用户证书认证字段
+kubectl config set-credentials cluster-admin --certificate-authority=ca.pem --client-key=admin-key.pem --client-certificate=admin.pem
+ cluster-admin  这是用户名，可以自定义
+
+[root@k8s-node-1 ~]# cat .kube/config
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: /root/ca.pem
+    server: https://192.168.224.11:6443
+  name: kubernetes
+contexts: []
+current-context: ""
+kind: Config
+preferences: {}
+users:
+- name: cluster-admin
+  user:
+    as-user-extra: {}
+    client-certificate: /root/admin.pem
+    client-key: /root/admin-key.pem
+添加了上面信息
+
+# 设置环境项中名为default的默认集群和用户，设置上下文
+kubectl config set-context default --cluster=kubernetes --user=cluster-admin
+[root@k8s-node-1 ~]# cat .kube/config
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: /root/ca.pem
+    server: https://192.168.224.11:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: cluster-admin
+  name: default
+current-context: ""
+kind: Config
+preferences: {}
+users:
+- name: cluster-admin
+  user:
+    as-user-extra: {}
+    client-certificate: /root/admin.pem
+    client-key: /root/admin-key.pem
+
+# 设置默认环境项为default
+kubectl config use-context default
+
+[root@k8s-node-1 ~]# cat .kube/config
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: /root/ca.pem
+    server: https://192.168.224.11:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: cluster-admin
+  name: default
+current-context: default
+kind: Config
+preferences: {}
+users:
+- name: cluster-admin
+  user:
+    as-user-extra: {}
+    client-certificate: /root/admin.pem
+    client-key: /root/admin-key.pem
+
+
+就用这个配置文件去访问集群
+
+
+
+
+下面的内容是另一个视频的
+[root@master k8s]# cat kubernetes-dashboard.yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system 使用的命名空间是这个，待会查询要用到
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubernetes-dashboard
+  template:
+    metadata:
+      labels:
+        app: kubernetes-dashboard
+      # Comment the following annotation if Dashboard must not be deployed on master
+      annotations:
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [
+            {
+              "key": "dedicated",
+              "operator": "Equal",
+              "value": "master",
+              "effect": "NoSchedule"
+            }
+          ]
+    spec:
+      containers:
+      - name: kubernetes-dashboard
+        image: registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64:v1.7.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        args:
+           - --apiserver-host=http://192.168.224.142:8080 #要改
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9090
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 9090
+  selector:
+app: kubernetes-dashboard
+
+
+[root@master k8s]# kubectl create -f kubernetes-dashboard.yaml
+deployment "kubernetes-dashboard" created
+service "kubernetes-dashboard" created
+
+
+默认是看不到的
+[root@master k8s]# kubectl get pods
+NAME                   READY     STATUS    RESTARTS   AGE
+nginx-8586cf59-qb47l   1/1       Running   0          47m
+nginx-8586cf59-tbz9p   1/1       Running   0          47m
+nginx-8586cf59-vp9vk   1/1       Running   0          47m
+
+
+因为他的命名空间是默认的，default
+[root@master k8s]# kubectl get ns
+NAME          STATUS    AGE
+default          Active     1h
+kube-public      Active     1h
+kube-system     Active     1h
+
+要看的时候要加命名空间去看
+[root@master k8s]# kubectl get pods -n kube-system
+NAME                                   READY     STATUS    RESTARTS   AGE
+kubernetes-dashboard-69fbd8556-bp66m       1/1       Running   0          4m
+
+可以详细查询
+[root@master k8s]# kubectl describe pod  kubernetes-dashboard-69fbd8556-bp66m -n kube-system
+Name:         kubernetes-dashboard-69fbd8556-bp66m
+Namespace:    kube-system
+Node:         192.168.224.143/192.168.224.143
+Start Time:   Tue, 28 Aug 2018 14:53:24 +0800
+Labels:       app=kubernetes-dashboard
+              pod-template-hash=259684112
+Annotations:  scheduler.alpha.kubernetes.io/tolerations=[
+  {
+    "key": "dedicated",
+    "operator": "Equal",
+    "value": "master",
+    "effect": "NoSchedule"
+  }
+]
+
+Status:         Running
+IP:             172.17.0.3
+Controlled By:  ReplicaSet/kubernetes-dashboard-69fbd8556
+Containers:
+  kubernetes-dashboard:
+    Container ID:  docker://d558e52b8d0bc5087210d406c82c3ed5beafb43a4d5fa8b851d7513384a1ad94
+    Image:         registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64:v1.7.0
+    Image ID:      docker-pullable://registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64@sha256:0b36ab8bf6efc19ccc69a65a65709173436b4d13d18416c05f31c30779fbe5de
+    Port:          9090/TCP
+    Args:
+      --apiserver-host=http://192.168.224.142:8080
+    State:          Running
+      Started:      Tue, 28 Aug 2018 14:53:49 +0800
+    Ready:          True
+    Restart Count:  0
+    Liveness:       http-get http://:9090/ delay=30s timeout=30s period=10s #success=1 #failure=3
+    Environment:    <none>
+    Mounts:         <none>
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:         <none>
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason     Age   From                      Message
+  ----    ------     ----  ----                      -------
+  Normal  Scheduled  7m    default-scheduler         Successfully assigned kubernetes-dashboard-69fbd8556-bp66m to 192.168.224.143
+  Normal  Pulling    7m    kubelet, 192.168.224.143  pulling image "registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64:v1.7.0"
+  Normal  Pulled     6m    kubelet, 192.168.224.143  Successfully pulled image "registry.cn-hangzhou.aliyuncs.com/google_containers/kubernetes-dashboard-amd64:v1.7.0"
+  Normal  Created    6m    kubelet, 192.168.224.143  Created container
+  Normal  Started    6m    kubelet, 192.168.224.143  Started container
+
+
+看看能否访问
+[root@master k8s]# kubectl get pods -n kube-system
+NAME                                   READY     STATUS    RESTARTS   AGE
+kubernetes-dashboard-69fbd8556-bp66m   1/1       Running   0          10m
+
+
+[root@master k8s]# kubectl get svc -n kube-system
+NAME                   TYPE       CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+kubernetes-dashboard      NodePort   10.10.10.49   <none>        80:32551/TCP   11m
+
+32551 用这个端口去访问
+ 
+这个ui很难满足工作需要，用它做简单的观察，查看日志排错用，并不指望他做些什么
