@@ -3042,6 +3042,12 @@ heapster-rbac.yaml
 
 docker load < heapster-amd64.tar
 
+或到百度云获取
+
+链接：https://pan.baidu.com/s/1c9AOGKMX_jauLXxGJsnaFg 
+提取码：2469 
+
+
 docker tag gcr.io/google_containers/heapster-amd64:v1.4.2 index.tenxcloud.com/jimmy/heapster-amd64:v1.3.0-beta.1
  
  
