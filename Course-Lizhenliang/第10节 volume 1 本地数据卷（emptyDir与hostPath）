@@ -1,0 +1,118 @@
+Volume 
+ emptyDir  空目录,与docker的数据卷类似,在宿主机上创建一个数据卷目录,挂载到容器中,
+ hostPath  挂载宿主机目录到pod中,与docker宿主机挂载目录到容器类似
+ nfs 分布式网络存储,在多个节点挂载某个存储实现数据统一
+ glusterfs 分布式网络存储,
+https://kubernetes.io/docs/concepts/storage/volumes/
+
+示例:
+Volume – emptyDir
+
+
+mkdir volume && cd volume/
+
+cat << EOF> edir.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-pod
+spec:
+  containers:
+  - image: redis
+    name: redis
+    volumeMounts:
+    - mountPath: /cache
+      name: cache-volume
+  volumes:
+  - name: cache-volume
+    emptyDir: {}
+EOF
+
+[root@Master01 volume]# kubectl create -f edir.yaml
+pod "redis-pod" created
+
+[root@Master01 volume]# kubectl get po
+NAME                                READY     STATUS    RESTARTS   AGE
+redis-pod                           1/1       Running   0          23s
+
+查看在宿主机创建的空目录，目前挂载容器中的/cache目录
+[root@Master01 volume]# kubectl exec -it redis-pod bash
+
+root@redis-pod:/data# cd /cache/
+
+root@redis-pod:/cache# mount | grep cache
+/dev/mapper/centos-root on /cache type xfs (rw,relatime,attr2,inode64,noquota)
+
+
+
+[root@Master01 volume]# kubectl describe po  redis-pod
+Name:         redis-pod
+Namespace:    default
+Node:         192.168.224.185/192.168.224.185
+    Mounts:
+      /cache from cache-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+
+Volumes:
+  cache-volume:
+    Type:    EmptyDir (a temporary directory that shares a pod's lifetime)
+
+   Normal  SuccessfulMountVolume  6m    kubelet, 192.168.224.185  MountVolume.SetUp succeeded for volume "cache-volume"
+  Normal  SuccessfulMountVolume  6m    kubelet, 192.168.224.185  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+ 
+多个容器同时挂载这个卷，
+  volumes:
+  - name: cache-volume
+就可以同时共享这个卷的数据，删除pod时，这个卷也会被删除，
+好处：
+1、临时数据，容器数据目录，放到宿主机，提高性能，如果在容器中会降低性能
+2、pod文件共享，
+
+Volume – hostPath 将宿主机的文件目录挂载到容器中
+
+[root@Master01 volume]# kubectl delete -f edir.yaml
+pod "redis-pod" deleted
+
+cat <<EOF> hostpath.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+  - image: nginx
+    name: test-container
+    volumeMounts:
+    - mountPath: /tmp-test
+      name: test-volume
+  volumes:
+  - name: test-volume
+    hostPath:
+      path: /tmp
+      type: Directory
+EOF
+
+[root@Master01 volume]# kubectl create -f hostpath.yaml
+pod "test-pd" created
+
+[root@Master01 volume]# kubectl get po
+NAME                                READY     STATUS    RESTARTS   AGE
+test-pd                             1/1       Running   0          5m
+
+[root@Master01 volume]# kubectl exec -it test-pd bash
+
+root@test-pd:/# ls /tmp-test/
+systemd-private-08329459b436457684cd8f1261c4847c-chronyd.service-Ra5boy
+systemd-private-08329459b436457684cd8f1261c4847c-httpd.service-bElFav
+.............................................................
+
+[root@Master01 volume]# kubectl get po -o wide
+NAME                                READY     STATUS    RESTARTS   AGE       IP            NODE
+test-pd                             1/1       Running   0          23m       172.30.20.6   192.168.224.185
+
+在192.168.224.185上
+[root@Node03 ~]# ls /tmp/
+systemd-private-08329459b436457684cd8f1261c4847c-chronyd.service-Ra5boy
+systemd-private-08329459b436457684cd8f1261c4847c-httpd.service-bElFav
+.........................................................
