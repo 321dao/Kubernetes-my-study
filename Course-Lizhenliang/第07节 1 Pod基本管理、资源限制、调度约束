@@ -1,0 +1,554 @@
+Pod管理
+ 创建/查询/更新/删除
+ 资源限制
+ 调度约束
+ 重启策略
+ 健康检查
+ 问题定位
+[root@Master01 pod]# vim pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod" created
+
+
+
+[root@Master01 pod]# kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+my-nginx-56b48db847-gszxq           1/1       Running   2          1d
+my-nginx-56b48db847-tz87r           1/1       Running   2          1d
+nginx                               1/1       Running   2          1d
+nginx-deployment-58d6d6ccb8-dzghc   1/1       Running   0          30m
+nginx-deployment-58d6d6ccb8-lltfm   1/1       Running   0          30m
+nginx-deployment-58d6d6ccb8-pxdbt   1/1       Running   0          30m
+nginx-ds-drf7c                      1/1       Running   2          1d
+nginx-ds-kr8zt                      1/1       Running   2          1d
+nginx-ds-xgs9f                      1/1       Running   2          1d
+nginx-pod                           1/1       Running   0          32s
+
+如果是别的命名空间，则需要指定，默认的不需要指定
+[root@Master01 pod]# kubectl get pods -n kube-system
+NAME                                    READY     STATUS             RESTARTS   AGE
+heapster-9bd589759-9lfzw                0/1       ImagePullBackOff   0          1d
+kube-dns-9d8b5fb76-khf2d                3/3       Running            6          1d
+kubernetes-dashboard-68696db46c-5rf2x   1/1       Running            2          1d
+monitoring-grafana-5c8d68cb94-chg4l     1/1       Running            1          1d
+monitoring-influxdb-774cf8fcc6-gpqrp    1/1       Running            1          1d
+
+
+
+
+[root@Master01 pod]# kubectl describe pod nginx-pod
+Name:         nginx-pod
+Namespace:    default
+Node:         192.168.224.185/192.168.224.185
+Start Time:   Wed, 19 Sep 2018 15:12:14 +0800
+Labels:       app=nginx
+Annotations:  <none>
+Status:       Running
+IP:           172.30.90.7
+Containers:
+  nginx:
+    Container ID:   docker://3aece9c9a55b0169638da309dae8a2e41789085ffa59c4d67d710e8e7f60462e
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+    Port:           <none>
+    State:          Running
+      Started:      Wed, 19 Sep 2018 15:12:35 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-fvtvz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-fvtvz
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              5m    default-scheduler         Successfully assigned nginx-pod to 192.168.224.185
+  Normal  SuccessfulMountVolume  5m    kubelet, 192.168.224.185  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+  Normal  Pulling                5m    kubelet, 192.168.224.185  pulling image "nginx"
+  Normal  Pulled                 5m    kubelet, 192.168.224.185  Successfully pulled image "nginx"
+  Normal  Created                5m    kubelet, 192.168.224.185  Created container
+  Normal  Started                5m    kubelet, 192.168.224.185  Started container
+
+
+资源替换，先删除再创建的
+[root@Master01 pod]# kubectl delete -f pod.yaml
+pod "nginx-pod" deleted
+
+[root@Master01 pod]# kubectl get pods
+NAME                                READY     STATUS        RESTARTS   AGE
+my-nginx-56b48db847-gszxq           1/1       Running       2          1d
+my-nginx-56b48db847-tz87r           1/1       Running       2          1d
+nginx                               1/1       Running       2          1d
+nginx-deployment-58d6d6ccb8-dzghc   1/1       Running       0          37m
+nginx-deployment-58d6d6ccb8-lltfm   1/1       Running       0          37m
+nginx-deployment-58d6d6ccb8-pxdbt   1/1       Running       0          37m
+nginx-ds-drf7c                      1/1       Running       2          1d
+nginx-ds-kr8zt                      1/1       Running       2          1d
+nginx-ds-xgs9f                      1/1       Running       2          1d
+nginx-pod                           0/1       Terminating   0          7m
+
+
+[root@Master01 pod]# vim pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.12
+
+将镜像改为1.12
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod" created
+
+[root@Master01 pod]# kubectl get pods
+NAME                                READY     STATUS              RESTARTS   AGE
+my-nginx-56b48db847-gszxq           1/1       Running             2          1d
+my-nginx-56b48db847-tz87r           1/1       Running             2          1d
+nginx                               1/1       Running             2          1d
+nginx-deployment-58d6d6ccb8-dzghc   1/1       Running             0          38m
+nginx-deployment-58d6d6ccb8-lltfm   1/1       Running             0          38m
+nginx-deployment-58d6d6ccb8-pxdbt   1/1       Running             0          38m
+nginx-ds-drf7c                      1/1       Running             2          1d
+nginx-ds-kr8zt                      1/1       Running             2          1d
+nginx-ds-xgs9f                      1/1       Running             2          1d
+nginx-pod                           0/1       ContainerCreating   0          3s
+
+
+
+[root@Master01 pod]# kubectl describe pod nginx-pod
+Name:         nginx-pod
+Namespace:    default
+Node:         192.168.224.184/192.168.224.184
+Start Time:   Wed, 19 Sep 2018 15:21:27 +0800
+Labels:       app=nginx
+Annotations:  <none>
+Status:       Running
+IP:           172.30.66.7
+Containers:
+  nginx:
+    Container ID:   docker://4035da79e2dc168b8092a685858242d4949363e8d09cdf5a8919280e45ece33e
+    Image:          nginx:1.12
+    Image ID:       docker-pullable://nginx@sha256:72daaf46f11cc753c4eab981cbf869919bd1fee3d2170a2adeac12400f494728
+    Port:           <none>
+    State:          Running
+      Started:      Wed, 19 Sep 2018 15:21:48 +0800
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-fvtvz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-fvtvz
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              42s   default-scheduler         Successfully assigned nginx-pod to 192.168.224.184
+  Normal  SuccessfulMountVolume  42s   kubelet, 192.168.224.184  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+  Normal  Pulling                41s   kubelet, 192.168.224.184  pulling image "nginx:1.12"
+  Normal  Pulled                 22s   kubelet, 192.168.224.184  Successfully pulled image "nginx:1.12"
+  Normal  Created                22s   kubelet, 192.168.224.184  Created container
+  Normal  Started                21s   kubelet, 192.168.224.184  Started container
+
+
+
+[root@Master01 pod]# kubectl replace -h
+Replace a resource by filename or stdin.
+
+Examples:
+  # Replace a pod using the data in pod.json.
+  kubectl replace -f ./pod.json
+
+  # Replace a pod based on the JSON passed into stdin.
+  cat pod.json | kubectl replace -f - 
+
+  # Update a single-container pod's image version (tag) to v4
+  kubectl get pod mypod -o yaml | sed 's/\(image: myimage\):.*$/\1:v4/' | kubectl replace -f -
+
+  # Force replace, delete and then re-create the resource
+  kubectl replace --force -f ./pod.json
+
+
+[root@Master01 pod]# kubectl replace pod.yaml --force
+error: Must specify --filename to replace
+See 'kubectl replace -h' for help and examples.
+[root@Master01 pod]# kubectl replace -f  pod.yaml --force
+pod "nginx-pod" deleted
+pod "nginx-pod" replaced
+
+
+基本管理：
+# 创建pod资源
+kubectl create -f pod.yaml
+# 查看pods
+kubectl get pods nginx-pod
+# 查看pod描述
+kubectl describe pod nginx-pod
+# 更新资源
+kubectl apply -f pod.yaml
+# 删除资源
+kubectl delete pod nginx-pod
+
+
+[root@Master01 pod]# kubectl apply -h
+
+Examples:
+  # Apply the configuration in pod.json to a pod.
+  kubectl apply -f ./pod.json
+
+  # Apply the JSON passed into stdin to a pod.
+  cat pod.json | kubectl apply -f -
+
+  # Note: --prune is still in Alpha
+  # Apply the configuration in manifest.yaml that matches label app=nginx and delete all the other resources that are
+not in the file and match label app=nginx.
+  kubectl apply --prune -f manifest.yaml -l app=nginx
+
+  # Apply the configuration in manifest.yaml and delete all the other configmaps that are not in the file.
+  kubectl apply --prune -f manifest.yaml --all --prune-whitelist=core/v1/ConfigMap
+
+
+[root@Master01 pod]# kubectl apply -f pod.yaml
+Warning: kubectl apply should be used on resource created by either kubectl create --save-config or kubectl apply
+pod "nginx-pod" configured
+
+
+删除之前创建的app=nginx标签的pod和svc
+[root@Master01 pod]# kubectl delete pods,services -l app=nginx
+pod "nginx-deployment-58d6d6ccb8-dzghc" deleted
+pod "nginx-deployment-58d6d6ccb8-lltfm" deleted
+pod "nginx-deployment-58d6d6ccb8-pxdbt" deleted
+pod "nginx-pod" deleted
+service "nginx-service" deleted
+
+
+Pod管理 – 资源限制
+示例：
+[root@Master01 pod]# vim pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+
+
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod" created
+
+
+
+[root@Master01 pod]# kubectl get po/nginx-pod
+NAME        READY     STATUS    RESTARTS   AGE
+nginx-pod   1/1       Running   0          1m
+[root@Master01 pod]# kubectl describe  po/nginx-pod
+Name:         nginx-pod
+Namespace:    default
+Node:         192.168.224.185/192.168.224.185
+Start Time:   Wed, 19 Sep 2018 16:52:00 +0800
+Labels:       app=nginx
+Annotations:  <none>
+Status:       Running
+IP:           172.30.90.5
+Containers:
+  nginx:
+    Container ID:   docker://a5f2fa4a5e16f2a5c8be3f7e1e933a23243ea3dafed5950f87a67140a817c64c
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+    Port:           <none>
+    State:          Running
+      Started:      Wed, 19 Sep 2018 16:52:02 +0800
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     500m
+      memory:  128Mi
+    Requests:
+      cpu:        250m
+      memory:     64Mi
+    Environment:  <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fvtvz (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  default-token-fvtvz:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-fvtvz
+    Optional:    false
+QoS Class:       Burstable
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type    Reason                 Age   From                      Message
+  ----    ------                 ----  ----                      -------
+  Normal  Scheduled              1m    default-scheduler         Successfully assigned nginx-pod to 192.168.224.185
+  Normal  SuccessfulMountVolume  1m    kubelet, 192.168.224.185  MountVolume.SetUp succeeded for volume "default-token-fvtvz"
+  Normal  Pulling                1m    kubelet, 192.168.224.185  pulling image "nginx"
+  Normal  Pulled                 1m    kubelet, 192.168.224.185  Successfully pulled image "nginx"
+  Normal  Created                1m    kubelet, 192.168.224.185  Created container
+  Normal  Started                1m    kubelet, 192.168.224.185  Started container
+
+
+[root@Master01 pod]# kubectl get pod  nginx-pod -o wide
+NAME        READY     STATUS    RESTARTS   AGE       IP            NODE
+nginx-pod   1/1       Running   0          4m        172.30.90.5   192.168.224.185
+
+去192.168.224.185操作，node3
+
+[root@Node03 ~]# docker ps
+CONTAINER ID        IMAGE                                                                             COMMAND                  CREATED        STATUS              PORTS               NAMES
+a5f2fa4a5e16        nginx
+
+
+
+[root@Node03 ~]# docker inspect a5f2fa4a5e16
+            "Isolation": "",
+            "CpuShares": 256,  ###使用的百分比
+            "Memory": 134217728,
+            "NanoCpus": 0,
+ 
+ 
+ 
+
+
+限额示例2:
+构建Deployment定义文件
+命名
+tomcat-deployment.yaml
+
+#与RC不同之处，版本配置不同
+apiVersion: extensions/v1beta1
+#与RC不同之处，Kind不同
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: frontend
+    matchExpressions:
+      - {key: tier, operator: In, values: [frontend]}
+  template:
+    metadata:
+      labels:
+        app: app-demo
+        tier: frontend
+    spec:
+      containers:
+      - name: tomcat-demo
+        image: tomcat
+# 设置资源限额，CPU通常以千分之一的CPU配额为最小单位，用m来表示。通常一个容器的CPU配额被定义为100~300m，即占用0.1~0.3个CPU；
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+
+[root@Master01 pod]# kubectl delete -f pod.yaml
+pod "nginx-pod" deleted
+
+
+
+
+Pod管理 – 调度约束
+
+Pod.spec.nodeName 强制约束Pod调度到指定Node节点上
+Pod.spec.nodeSelector 通过lable-selector机制选择节点
+
+示例：
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  # nodeName: node01  指定节点名称
+  nodeSelector:
+    env_role: dev   #匹配相关的label，如果有这个label，就会分配到这个节点上
+  containers:
+  - name: nginx
+    image: nginx
+ 
+ m  
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+查看有哪些node
+[root@Master01 pod]# kubectl get node
+NAME              STATUS    ROLES     AGE       VERSION
+192.168.224.185   Ready     <none>    2d        v1.9.7
+192.168.224.184   Ready     <none>    2d        v1.9.7
+192.168.224.183   Ready     <none>    2d        v1.9.7
+
+
+实际操作
+[root@Master01 pod]# vim pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  nodeName: 192.168.224.183
+#  nodeSelector:
+#    env_role: dev
+  containers:
+  - name: nginx
+    image: nginx
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod" created
+
+
+[root@Master01 pod]# kubectl  get pods -o wide
+NAME             READY     STATUS    RESTARTS   AGE       IP            NODE
+nginx-ds-drf7c   1/1       Running   2          2d        172.30.45.3   192.168.224.183
+nginx-ds-kr8zt   1/1       Running   2          2d        172.30.90.3   192.168.224.185
+nginx-ds-xgs9f   1/1       Running   2          2d        172.30.66.5   192.168.224.184
+nginx-pod        1/1       Running   0          50s       172.30.45.5   192.168.224.183
+
+
+案例2
+[root@Master01 pod]# vim pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod2
+  labels:
+    app: nginx
+spec:
+#  nodeName: 192.168.224.183
+  nodeSelector:
+    env_role: dev
+  containers:
+  - name: nginx
+    image: nginx
+
+
+
+
+[root@Master01 pod]# kubectl describe node 192.168.224.183
+Name:               192.168.224.184
+Roles:              <none>
+Labels:             beta.kubernetes.io/arch=amd64
+                    beta.kubernetes.io/os=linux
+                    kubernetes.io/hostname=192.168.224.183
+
+自定义打标签到192.168.224.183
+
+[root@Master01 pod]# kubectl label nodes 192.168.224.183 env_role=dev
+node "192.168.224.183" labeled
+
+[root@Master01 pod]# kubectl describe node 192.168.224.183
+Name:               192.168.224.183
+Roles:              <none>
+Labels:             beta.kubernetes.io/arch=amd64
+                    beta.kubernetes.io/os=linux
+                    env_role=dev
+                    kubernetes.io/hostname=192.168.224.183
+
+
+[root@Master01 pod]# kubectl create -f pod.yaml
+pod "nginx-pod2" created
+
+[root@Master01 pod]# kubectl get pods -o wide
+NAME             READY     STATUS    RESTARTS   AGE       IP            NODE
+nginx-ds-drf7c   1/1       Running   2          2d        172.30.45.3   192.168.224.183
+nginx-ds-kr8zt   1/1       Running   2          2d        172.30.90.3   192.168.224.185
+nginx-ds-xgs9f   1/1       Running   2          2d        172.30.66.5   192.168.224.184
+nginx-pod        1/1       Running   0          15m       172.30.45.5   192.168.224.183
+nginx-pod2       1/1       Running   0          1m        172.30.45.6   192.168.224.183
+
+
+Pod管理 – 重启策略
+
+三种重启策略：
+Always：当容器停止，总是重建容器，默认策略。
+OnFailure：当容器异常退出（退出状态码非0）时，才重启容器。 一般调整为这个
+Never：当容器终止退出，从不重启容器
+
+示例：
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  restartPolicy: OnFailure
