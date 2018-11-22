@@ -1,0 +1,255 @@
+PersistentVolumes - PVC
+参考搭建官方文档：
+https://kubernetes.io/docs/tutorials/stateful-application/mysql-wordpress-persistent-volume/
+
+[root@Master01 ~]# mkdir lnmp ；cd lnmp
+将文件夹配置文件上传上来
+C:\Users\Administrator\Desktop\k8s刘振良 腾讯课程学习记录\Kubernetes企业级Docker容器集群管理平台实践 - 课件\LNMP
+[root@Master01 gluster-pv]# kubectl get pv
+NAME           CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS   REASON    AGE
+gluster-pv00   5Gi        RWX            Retain           Available                                             1h
+gluster-pv01   10Gi       RWX            Retain           
+Available                                             6s
+gluster-pv02   20Gi       RWX            Retain           Bound       default/pvc001                            1h
+
+计划用10G的持久卷
+现在创建两个pv,在上传上来的pv.yaml上
+/root/lnmp/pv.yaml
+解读文件
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  glusterfs:
+    endpoints: "glusterfs-cluster"
+    path: "gv0"
+这是存放mysql的pv，一共20G，使用的数据卷是glusterfs
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wp-pv01
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    path: /opt/nfs/data
+    server: 192.168.0.215
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wp-pv02
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    path: /opt/nfs/data
+    server: 192.168.0.215
+
+再创建两个WordPress的pv，用的是数据卷是nfs，设置的都是5G，一个分配给nginx，一个分配给php
+
+sed -i 's/ 192.168.0.215/ 192.168.224.143/g' pv.yaml
+
+[root@Master01 lnmp]# kubectl get pv,pvc
+NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS   REASON    AGE
+pv/gluster-pv00   5Gi        RWX            Retain           Available                                             1h
+pv/gluster-pv01   10Gi       RWX            Retain           Available                                             18m
+pv/gluster-pv02   20Gi       RWX            Retain           Bound       default/pvc001                            1h
+
+NAME         STATUS    VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     gluster-pv02   20Gi       RWX                           1h
+
+如果pv/nfs存在的话把它删了，因为即将要创建的估计会受影响
+
+[root@Master01 lnmp]# kubectl create -f pv.yaml
+persistentvolume "mysql-pv" created
+persistentvolume "wp-pv01" created
+persistentvolume "wp-pv02" created
+
+[root@Master01 lnmp]# kubectl get pv,pvc
+NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM            STORAGECLASS   REASON    AGE
+pv/gluster-pv00   5Gi        RWX            Retain           Available                                             1h
+pv/gluster-pv01   10Gi       RWX            Retain           Available                                             22m
+pv/gluster-pv02   20Gi       RWX            Retain           Bound       default/pvc001                            1h
+pv/mysql-pv       20Gi       RWX            Retain           Available                                             31s
+pv/wp-pv01        5Gi        RWX            Retain           Available                                             31s
+pv/wp-pv02        5Gi        RWX            Retain           Available                                             31s
+
+NAME         STATUS    VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+pvc/pvc001   Bound     gluster-pv02   20Gi       RWX                           1h
+
+
+
+先创建个密码
+ [root@Master01 lnmp]# kubectl create secret -h
+Create a secret using specified subcommand.
+
+Available Commands:
+  docker-registry 创建一个给 Docker registry 使用的 secret
+  generic         从本地 file, directory 或者 literal value 创建一个 secret
+  tls             创建一个 TLS secret
+
+Usage:
+  kubectl create secret [options]
+ 
+
+[root@Master01 lnmp]# kubectl create secret generic  -h
+
+Examples:
+  # Create a new secret named my-secret with keys for each file in folder bar
+  kubectl create secret generic my-secret --from-file=path/to/bar
+
+  # Create a new secret named my-secret with specified keys instead of names on disk
+  kubectl create secret generic my-secret --from-file=ssh-privatekey=~/.ssh/id_rsa
+--from-file=ssh-publickey=~/.ssh/id_rsa.pub
+
+  # Create a new secret named my-secret with key1=supersecret and key2=topsecret
+  kubectl create secret generic my-secret --from-literal=key1=supersecret --from-literal=key2=topsecret
+
+  # Create a new secret named my-secret using a combination of a file and a literal
+  kubectl create secret generic my-secret --from-file=ssh-privatekey=~/.ssh/id_rsa --from-literal=passphrase=topsecret
+
+  # Create a new secret named my-secret from an env file
+  kubectl create secret generic my-secret --from-env-file=path/to/bar.env
+
+Usage:
+  kubectl create secret generic NAME [--type=string] [--from-file=[key=]source] [--from-literal=key1=value1] [--dry-run]
+[options]
+
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+创建MYSQL密码,待会把变量传进容器中
+[root@Master01 lnmp]# kubectl create secret generic mysql-pass --from-literal=password=123456
+ 
+secret "mysql-pass" created
+
+
+MYSQL_ROOT_PASSWORD
+
+
+删除命令
+[root@Master01 lnmp]# kubectl  delete secret mysql-pass
+secret "mysql-pass" deleted
+
+官方教程
+https://kubernetes.io/docs/tutorials/stateful-application/mysql-wordpress-persistent-volume/
+
+
+如果没有配置文件，也可以这样创建
+1.	  kubectl create -f https://k8s.io/examples/application/wordpress/mysql-deployment.yam
+2.	  kubectl create -f https://k8s.io/examples/application/wordpress/wordpress-deployment.yaml
+3.	
+4.	
+[root@Master01 lnmp]# kubectl create -f mysql-deployment.yaml
+service "wordpress-mysql" created
+persistentvolumeclaim "mysql-pv-claim" created
+deployment "wordpress-mysql" created
+
+pvc报错无法绑定,删除以下pv即可
+[root@Master01 lnmp]# kubectl get pv
+NAME         CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM     STORAGECLASS   REASON    AGE
+gluster-pv   10Gi       RWX            Retain           Available                                      1h
+
+
+
+验证Pod
+[root@Master01 lnmp]# kubectl get po
+NAME                               READY     STATUS    RESTARTS   AGE
+mypod                              1/1       Running   0          2h
+wordpress-mysql-58cf8dc9f9-zvm2q   1/1       Running   0          8m
+
+验证pvc
+[root@Master01 lnmp]#   kubectl get pvc
+NAME             STATUS    VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mysql-pv-claim   Bound     mysql-pv       20Gi       RWX                           1h
+
+
+修改nginx-deployment.yaml 的镜像
+        image: wordpress:4.8-apache
+
+
+
+[root@Master01 lnmp]# kubectl  exec -it wordpress-mysql-58cf8dc9f9-gq5rh bash
+
+mysql> use mysql;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> UPDATE user SET Password = PASSWORD('123456') WHERE user = 'root';
+Query OK, 4 rows affected (0.05 sec)
+Rows matched: 4  Changed: 4  Warnings: 0
+
+mysql>  FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0.02 sec)
+
+
+mysql> create database wp;
+
+
+http://192.168.224.184:33522/wp-admin/setup-config.php?step=1&language=zh_CN
+ 
+
+主机名查询
+ 
+
+
+接下来启动php
+镜像需要修改
+        image: registry.cn-hangzhou.aliyuncs.com/diligentyang/centos6.7_nginx_1.10_php5.6.29:v1.0
+
+[root@Master01 lnmp]# kubectl create -f php-deployment.yaml
+service "wordpress-php" created
+persistentvolumeclaim "wp-pvc01" created
+deployment "wordpress-php" created
+
+
+
+
+
+
+
+
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc001
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+
+
+
+
+
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+      volumeMounts:
+      - mountPath: "/usr/share/nginx/html"
+        name: wwwroot
+  volumes:
+    - name: wwwroot
+      persistentVolumeClaim:
+        claimName: pvc001
