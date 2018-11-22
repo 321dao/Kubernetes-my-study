@@ -1,0 +1,183 @@
+
+列出api版本
+[root@k8s-master ~]# kubectl api-versions
+admissionregistration.k8s.io/v1beta1
+apiextensions.k8s.io/v1beta1
+apiregistration.k8s.io/v1beta1
+apps/v1
+apps/v1beta1
+apps/v1beta2
+authentication.k8s.io/v1
+authentication.k8s.io/v1beta1
+authorization.k8s.io/v1
+authorization.k8s.io/v1beta1
+autoscaling/v1
+autoscaling/v2beta1
+batch/v1
+batch/v1beta1
+certificates.k8s.io/v1beta1
+events.k8s.io/v1beta1
+extensions/v1beta1
+networking.k8s.io/v1
+policy/v1beta1
+rbac.authorization.k8s.io/v1
+rbac.authorization.k8s.io/v1beta1
+storage.k8s.io/v1
+storage.k8s.io/v1beta1
+v1
+
+例子
+[root@k8s-master ui]# cat dashboard-deployment.yaml
+apiVersion: apps/v1beta2
+kind: Deployment
+
+
+配置文件说明：
+ 定义配置时，指定最新稳定版API（当前为v1）；
+ 配置文件应该存储在集群之外的版本控制仓库中。如果需要，可以快速回滚配置、重新创建和恢复；
+ 应该使用YAML格式编写配置文件，而不是JSON。尽管这些格式都可以使用，但YAML对用户更加友好；
+ 可以将相关对象组合成单个文件，通常会更容易管理；
+[root@k8s-master ui]# ls
+dashboard-deployment.yaml  dashboard-rbac.yaml  dashboard-service.yaml
+顺序：
+dashboard-rbac.yaml
+dashboard-deployment.yaml
+dashboard-service.yaml
+
+不要没必要的指定默认值，简单和最小配置减少错误；
+例如
+ 
+
+
+ 在注释中说明一个对象描述更好维护，用的是#
+
+
+[root@k8s-master nginx]# vim nginx-deployment.yaml
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: default  #还可以加这些
+  labels:
+    web: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.10
+          ports:
+          - containerPort: 80
+
+[root@k8s-master nginx]# kubectl create -f nginx-deployment.yaml
+deployment "nginx-deployment" created
+
+
+[root@k8s-master nginx]# kubectl get all -o wide
+NAME                      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/busybox            1         1         1            0           3h        busybox      busybox      run=busybox
+deploy/nginx-deployment   3         3         3            3           1m        nginx        nginx:1.10   app=nginx
+
+NAME                             DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/busybox-5d4f595646            1         1         0         3h        busybox      busybox      pod-template-hash=1809151202,run=busybox
+rs/nginx-deployment-58d6d6ccb8   3         3         3         1m        nginx        nginx:1.10   app=nginx,pod-template-hash=1482827764
+
+NAME                      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINERS   IMAGES       SELECTOR
+deploy/busybox            1         1         1            0           3h        busybox      busybox      run=busybox
+deploy/nginx-deployment   3         3         3            3           1m        nginx        nginx:1.10   app=nginx
+
+NAME                             DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES       SELECTOR
+rs/busybox-5d4f595646            1         1         0         3h        busybox      busybox      pod-template-hash=1809151202,run=busybox
+rs/nginx-deployment-58d6d6ccb8   3         3         3         1m        nginx        nginx:1.10   app=nginx,pod-template-hash=1482827764
+
+NAME                                   READY     STATUS             RESTARTS   AGE       IP            NODE
+po/busybox-5d4f595646-mnhfp            0/1       CrashLoopBackOff   19         1h        172.17.3.3    192.168.224.143
+po/nginx-deployment-58d6d6ccb8-2m4zr   1/1       Running            0          1m        172.17.3.4    192.168.224.143
+po/nginx-deployment-58d6d6ccb8-7bl6l   1/1       Running            0          1m        172.17.52.2   192.168.224.144
+po/nginx-deployment-58d6d6ccb8-pzsvd   1/1       Running            0          1m        172.17.52.3   192.168.224.144
+
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE       SELECTOR
+svc/kubernetes   ClusterIP   10.10.10.1   <none>        443/TCP   16h       <none>
+
+
+查看标签
+[root@k8s-master nginx]# kubectl describe deploy/nginx-deployment
+Name:                   nginx-deployment
+Namespace:              default
+CreationTimestamp:      Wed, 19 Sep 2018 13:24:49 +0800
+Labels:                 web=nginx
+Annotations:            deployment.kubernetes.io/revision=1
+Selector:               app=nginx
+Replicas:               3 desired | 3 updated | 3 total | 3 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=nginx
+  Containers:
+
+
+[root@k8s-master nginx]# vim nginx-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 88
+    targetPort: 80
+  selector:
+    app: nginx
+
+
+[root@k8s-master nginx]# kubectl create -f nginx-service.yaml
+service "nginx-service" created
+
+[root@k8s-master nginx]# kubectl get svc
+NAME            TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE
+kubernetes      ClusterIP   10.10.10.1     <none>        443/TCP   16h
+nginx-service   ClusterIP   10.10.10.195   <none>        88/TCP    41s
+
+
+[root@k8s-master nginx]# kubectl describe svc/nginx-service
+Name:              nginx-service
+Namespace:         default
+Labels:            app=nginx
+Annotations:       <none>
+Selector:          app=nginx
+Type:              ClusterIP
+IP:                10.10.10.195
+Port:              <unset>  88/TCP
+TargetPort:        80/TCP
+Endpoints:         172.17.3.4:80,172.17.52.2:80,172.17.52.3:80
+Session Affinity:  None
+Events:            <none>
+
+访问
+[root@Node01 ~]# curl 10.254.198.140:88
+184
+[root@Node01 ~]# curl 10.254.198.140:88
+185
+[root@Node01 ~]# curl 10.254.198.140:88
+183
+[root@Node01 ~]# curl 10.254.198.140:88
+185
+
+查看日志
+[root@Master01 nginx]# kubectl logs nginx-deployment-58d6d6ccb8-pxdbt
+172.30.45.0 - - [19/Sep/2018:06:46:07 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+172.30.45.0 - - [19/Sep/2018:06:46:19 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+172.30.45.0 - - [19/Sep/2018:06:46:23 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+172.30.66.1 - - [19/Sep/2018:06:46:29 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+
