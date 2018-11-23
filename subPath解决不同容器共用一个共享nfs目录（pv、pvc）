@@ -7,3 +7,26 @@ volumeMounts:
   mountPath: /usr/share/nginx/html
 ...
 
+
+
+更改完 YAML 文件后，我们重新更新即可：
+
+$ kubectl apply -f nfs-pvc-deploy.yaml
+Warning: kubectl apply should be used on resource created by either kubectl create --save-config or kubectl apply
+deployment.extensions "nfs-pvc" configured
+Warning: kubectl apply should be used on resource created by either kubectl create --save-config or kubectl apply
+service "nfs-pvc" configured
+
+
+更新完后，我们再去看看 nfs 的数据共享目录：
+
+$ ls /data/k8s/
+index.html  nginxpvc-test
+
+$ ls /data/k8s/nginxpvc-test/
+
+我们可以预想到现在我们访问上面的服务，是不是又会得到403的结果啊，因为nginxpvc-test目录下面还没有任何文件呢，我们把根目录下面的 index.html 文件一到到 nginxpvc-test 目录下面去是不是又可以访问了：
+
+$ mv /data/k8s/index.html /data/k8s/nginxpvc-test/
+
+现在快去验证下吧，看看能不能得到正确结果。
