@@ -40,3 +40,28 @@ strategy:  升级策略
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 1
+
+
+
+回滚上一个版本
+[root@Master test]# kubectl  rollout undo deploy/nginx-deploy
+deployment.apps "nginx-deploy"
+
+查看版本记录
+[root@Master test]# kubectl  rollout history deploy/nginx-deploy
+deployments "nginx-deploy"
+REVISION  CHANGE-CAUSE
+2         kubectl apply --filename=deploy-demo.yaml --record=true
+3         <none>
+
+
+查看指定版本
+
+[root@Master test]# kubectl rollout undo deploy/nginx-deploy --to-revision=2
+deployment.apps "nginx-deploy"
+
+[root@Master test]# kubectl  rollout history deploy/nginx-deploy
+deployments "nginx-deploy"
+REVISION  CHANGE-CAUSE
+3         <none>
+4         kubectl apply --filename=deploy-demo.yaml --record=true
