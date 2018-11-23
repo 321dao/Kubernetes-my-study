@@ -1,5 +1,9 @@
 Deployment的使用
 
+滚动更新
+[root@Master ~]# kubectl rolling-update rc-demo --image=nginx:1.7.9
+
+
 前面的课程中我们学习了Replication Controller和Replica Set两种资源对象，RC和RS的功能基本上是差不多的，唯一的区别就是RS支持集合的selector。我们也学习到了用RC/RS来控制Pod副本的数量，也实现了滚动升级Pod的功能。现在看上去似乎一切都比较完美的运行着，但是我们上节课最后也提到了现在我们推荐使用Deployment这种控制器了，而不是我们之前的RC或者RS，这是为什么呢？
 
 没有对比就没有伤害对吧，我们来对比下二者之间的功能吧，首先RC是Kubernetes的一个核心概念，当我们把应用部署到集群之后，需要保证应用能够持续稳定的运行，RC就是这个保证的关键，主要功能如下：
