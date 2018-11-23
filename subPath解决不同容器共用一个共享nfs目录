@@ -1,0 +1,9 @@
+我们可以看到我们容器中的数据是直接放到共享数据目录根目录下面的，如果以后我们又有一个新的 nginx 容器也做了数据目录的挂载，是不是就会有冲突了啊，所以这个时候就不太好区分了，这个时候我们可以在 Pod 中使用一个新的属性：subPath，该属性可以来解决这个问题，我们只需要更改上面的 Pod 的 YAML 文件即可：
+
+...
+volumeMounts:
+- name: www
+  subPath: nginxpvc-test
+  mountPath: /usr/share/nginx/html
+...
+
