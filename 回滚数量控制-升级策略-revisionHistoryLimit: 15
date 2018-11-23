@@ -32,3 +32,11 @@ EOF
 revisionHistoryLimit: 15 回滚数量控制，保留15个
 
 
+
+minReadySeconds: 5
+strategy:  升级策略
+  # indicate which strategy we want for rolling update
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 1
