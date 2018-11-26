@@ -1,0 +1,1972 @@
+master
+
+192.168.224.127
+192.168.224.128
+
+etcd
+ 192.168.224.127
+ 192.168.224.128
+ 192.168.224.129
+
+ node
+ 192.168.224.122
+ 192.168.224.132
+
+ Lb
+ 192.168.224.103
+ 192.168.224.104
+
+
+
+vim /etc/sysconfig/network-scripts/ifcfg-ens33
+
+hostnamectl --static  set-hostname  
+
+ service NetworkManager stop  && systemctl disable NetworkManager && service network start
+
+
+
+
+所有节点操作
+
+mkdir -p /usr/k8s/bin
+mkdir -p /etc/kubernetes/ssl
+mkdir -p /etc/flanneld/ssl
+mkdir -p  /root/.kube
+mkdir -p /etc/etcd/ssl
+mkdir -p /var/lib/etcd 
+mkdir -p /var/lib/etcd 
+mkdir /var/lib/kubelet
+mkdir -p /var/lib/kube-proxy 
+
+setenforce 0
+sed -i "s/enforcing/disabled/g" /etc/selinux/config
+
+
+
+master01建立ssh通信
+
+cd   ; mkdir .ssh
+ssh-keygen -t rsa
+ssh-copy-id   192.168.224.128
+ssh-copy-id   192.168.224.129
+ssh-copy-id   192.168.224.122
+ssh-copy-id   192.168.224.132
+
+
+
+
+上传 C:\Users\Administrator\Desktop\阳明教程\k8s1.11安装 
+k8s1.11.zip
+
+unzip k8s1.11.zip
+
+
+tar xvf kubernetes-server-linux-amd64.tar.gz
+tar xvf etcd-v3.3.9-linux-amd64.tar.gz
+tar xvf flannel-v0.10.0-linux-amd64.tar.gz
+unzip cfssl.zip
+
+
+cp kubernetes/server/bin/{kube-apiserver,kube-controller-manager,kubectl,kube-scheduler} /usr/k8s/bin/
+scp kubernetes/server/bin/{kube-apiserver,kube-controller-manager,kubectl,kube-scheduler} 192.168.224.128:/usr/k8s/bin/
+
+scp kubernetes/server/bin/{kubectl,kubelet,kube-proxy} 192.168.224.122:/usr/k8s/bin/
+scp kubernetes/server/bin/{kubectl,kubelet,kube-proxy} 192.168.224.132:/usr/k8s/bin/
+scp kubernetes/server/bin/{kubectl,kubelet,kube-proxy} 192.168.224.129:/usr/k8s/bin/
+
+cp etcd-v3.3.9-linux-amd64/etcd* /usr/k8s/bin/
+scp etcd-v3.3.9-linux-amd64/etcd* 192.168.224.128:/usr/k8s/bin/
+scp etcd-v3.3.9-linux-amd64/etcd* 192.168.224.129:/usr/k8s/bin/
+
+scp flanneld mk-docker-opts.sh 192.168.224.129:/usr/k8s/bin/
+scp flanneld mk-docker-opts.sh 192.168.224.132:/usr/k8s/bin/
+scp flanneld mk-docker-opts.sh 192.168.224.122:/usr/k8s/bin/
+
+
+
+ sudo mv cfssl/cfssl_linux-amd64 cfssl/cfssl
+ sudo mv cfssl/cfssljson_linux-amd64 cfssl/cfssljson
+ sudo mv cfssl/cfssl-certinfo_linux-amd64 cfssl/cfssl-certinfo
+
+
+chmod +x cfssl/*
+cp cfssl/* /usr/k8s/bin/
+scp cfssl/* 192.168.224.128:/usr/k8s/bin/
+scp cfssl/* 192.168.224.129:/usr/k8s/bin/
+scp cfssl/* 192.168.224.122:/usr/k8s/bin/
+scp cfssl/* 192.168.224.132:/usr/k8s/bin/
+
+
+master01
+
+cp env.sh /usr/k8s/bin/
+scp env.sh 192.168.224.128:/usr/k8s/bin/
+scp env.sh 192.168.224.129:/usr/k8s/bin/
+scp env.sh 192.168.224.122:/usr/k8s/bin/
+scp env.sh 192.168.224.132:/usr/k8s/bin/
+
+
+各分别执行
+
+master01
+
+export NODE_IP=192.168.224.127
+cat << EOF >> /root/.bash_profile
+PATH=\$PATH:\$HOME/bin
+source /usr/k8s/bin/env.sh
+export PATH=/usr/k8s/bin:\$PATH
+export PATH
+EOF
+source /root/.bash_profile
+echo "192.168.224.127 k8s-api.virtual.local" >> /etc/hosts
+
+
+
+
+
+master02
+
+export NODE_IP=192.168.224.128
+cat << EOF >> /root/.bash_profile
+PATH=\$PATH:\$HOME/bin
+source /usr/k8s/bin/env.sh
+export PATH=/usr/k8s/bin:\$PATH
+export PATH
+EOF
+source /root/.bash_profile
+echo "192.168.224.128 k8s-api.virtual.local" >> /etc/hosts
+
+
+
+
+etcd03
+
+export NODE_IP=192.168.224.129
+cat << EOF >> /root/.bash_profile
+PATH=\$PATH:\$HOME/bin
+source /usr/k8s/bin/env.sh
+export PATH=/usr/k8s/bin:\$PATH
+export PATH
+EOF
+source /root/.bash_profile
+
+
+
+
+
+node01
+
+export NODE_IP=192.168.224.122
+cat << EOF >> /root/.bash_profile
+PATH=\$PATH:\$HOME/bin
+source /usr/k8s/bin/env.sh
+export PATH=/usr/k8s/bin:\$PATH
+export PATH
+EOF
+source /root/.bash_profile
+
+
+
+
+
+node02
+
+export NODE_IP=192.168.224.132
+cat << EOF >> /root/.bash_profile
+PATH=\$PATH:\$HOME/bin
+source /usr/k8s/bin/env.sh
+export PATH=/usr/k8s/bin:\$PATH
+export PATH
+EOF
+source /root/.bash_profile
+
+
+
+
+
+master01
+
+cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+sudo cp ca* /etc/kubernetes/ssl
+scp    ca*  192.168.224.128:/etc/kubernetes/ssl
+scp    ca*  192.168.224.129:/etc/kubernetes/ssl
+scp    ca*  192.168.224.122:/etc/kubernetes/ssl
+scp    ca*  192.168.224.132:/etc/kubernetes/ssl
+
+
+export NODE_NAME=etcd01  
+export NODE_IP=192.168.224.127  
+export NODE_IPS="192.168.224.127 192.168.224.128 192.168.224.129" 
+export ETCD_NODES=etcd01=https://192.168.224.127:2380,etcd02=https://192.168.224.128:2380,etcd03=https://192.168.224.129:2380
+
+
+
+cat > etcd-csr.json <<EOF
+{
+  "CN": "etcd",
+  "hosts": [
+    "127.0.0.1",
+    "${NODE_IP}"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "k8s",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
+  -ca-key=/etc/kubernetes/ssl/ca-key.pem \
+  -config=/etc/kubernetes/ssl/ca-config.json \
+  -profile=kubernetes etcd-csr.json | cfssljson -bare etcd
+
+ mv etcd*.pem /etc/etcd/ssl/
+
+
+ cat > etcd.service <<EOF
+[Unit]
+Description=Etcd Server
+After=network.target
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/coreos
+
+[Service]
+Type=notify
+WorkingDirectory=/var/lib/etcd/
+ExecStart=/usr/k8s/bin/etcd \\
+  --name=${NODE_NAME} \\
+  --cert-file=/etc/etcd/ssl/etcd.pem \\
+  --key-file=/etc/etcd/ssl/etcd-key.pem \\
+  --peer-cert-file=/etc/etcd/ssl/etcd.pem \\
+  --peer-key-file=/etc/etcd/ssl/etcd-key.pem \\
+  --trusted-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --peer-trusted-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --initial-advertise-peer-urls=https://${NODE_IP}:2380 \\
+  --listen-peer-urls=https://${NODE_IP}:2380 \\
+  --listen-client-urls=https://${NODE_IP}:2379,http://127.0.0.1:2379 \\
+  --advertise-client-urls=https://${NODE_IP}:2379 \\
+  --initial-cluster-token=etcd-cluster-0 \\
+  --initial-cluster=${ETCD_NODES} \\
+  --initial-cluster-state=new \\
+  --data-dir=/var/lib/etcd
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+ mv etcd.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable etcd
+systemctl start etcd
+systemctl status etcd
+
+
+
+在master02上操作
+
+export NODE_NAME=etcd02  
+export NODE_IP=192.168.224.128 
+export NODE_IPS="192.168.224.127 192.168.224.128 192.168.224.129" 
+export ETCD_NODES=etcd01=https://192.168.224.127:2380,etcd02=https://192.168.224.128:2380,etcd03=https://192.168.224.129:2380
+ source /usr/k8s/bin/env.sh
+
+
+在etcd03上操作
+
+export NODE_NAME=etcd03  
+export NODE_IP=192.168.224.129 
+export NODE_IPS="192.168.224.127 192.168.224.128 192.168.224.129" 
+export ETCD_NODES=etcd01=https://192.168.224.127:2380,etcd02=https://192.168.224.128:2380,etcd03=https://192.168.224.129:2380
+ source /usr/k8s/bin/env.sh
+
+
+在master02和etcd03上操作
+
+ 
+cd && mkdir ssl && cd ssl
+  
+
+cat > etcd-csr.json <<EOF
+{
+  "CN": "etcd",
+  "hosts": [
+    "127.0.0.1",
+    "${NODE_IP}"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "k8s",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+
+cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
+  -ca-key=/etc/kubernetes/ssl/ca-key.pem \
+  -config=/etc/kubernetes/ssl/ca-config.json \
+  -profile=kubernetes etcd-csr.json | cfssljson -bare etcd
+
+
+
+
+
+ cat > etcd.service <<EOF
+[Unit]
+Description=Etcd Server
+After=network.target
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/coreos
+
+[Service]
+Type=notify
+WorkingDirectory=/var/lib/etcd/
+ExecStart=/usr/k8s/bin/etcd \\
+  --name=${NODE_NAME} \\
+  --cert-file=/etc/etcd/ssl/etcd.pem \\
+  --key-file=/etc/etcd/ssl/etcd-key.pem \\
+  --peer-cert-file=/etc/etcd/ssl/etcd.pem \\
+  --peer-key-file=/etc/etcd/ssl/etcd-key.pem \\
+  --trusted-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --peer-trusted-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --initial-advertise-peer-urls=https://${NODE_IP}:2380 \\
+  --listen-peer-urls=https://${NODE_IP}:2380 \\
+  --listen-client-urls=https://${NODE_IP}:2379,http://127.0.0.1:2379 \\
+  --advertise-client-urls=https://${NODE_IP}:2379 \\
+  --initial-cluster-token=etcd-cluster-0 \\
+  --initial-cluster=${ETCD_NODES} \\
+  --initial-cluster-state=new \\
+  --data-dir=/var/lib/etcd
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+ mv etcd*.pem /etc/etcd/ssl/
+
+mv etcd.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable etcd
+systemctl start etcd
+systemctl status etcd
+
+
+检验
+
+for ip in ${NODE_IPS}; do
+  ETCDCTL_API=3 /usr/k8s/bin/etcdctl \
+  --endpoints=https://${ip}:2379  \
+  --cacert=/etc/kubernetes/ssl/ca.pem \
+  --cert=/etc/etcd/ssl/etcd.pem \
+  --key=/etc/etcd/ssl/etcd-key.pem \
+  endpoint health; done
+
+
+master01和master02
+
+
+source /usr/k8s/bin/env.sh
+export KUBE_APISERVER="https://${MASTER_URL}:6443"
+source /root/.bash_profile
+
+
+
+ cat > kubernetes-csr.json <<EOF
+{
+  "CN": "kubernetes",
+  "hosts": [
+    "127.0.0.1",
+    "${NODE_IP}",
+    "${MASTER_URL}",
+    "${CLUSTER_KUBERNETES_SVC_IP}",
+    "kubernetes",
+    "kubernetes.default",
+    "kubernetes.default.svc",
+    "kubernetes.default.svc.cluster",
+    "kubernetes.default.svc.cluster.local"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "k8s",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+
+
+cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
+  -ca-key=/etc/kubernetes/ssl/ca-key.pem \
+  -config=/etc/kubernetes/ssl/ca-config.json \
+  -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes
+
+ mv kubernetes*.pem /etc/kubernetes/ssl/
+
+
+
+
+
+cat > token.csv <<EOF
+${BOOTSTRAP_TOKEN},kubelet-bootstrap,10001,"system:kubelet-bootstrap"
+EOF
+ sudo mv token.csv /etc/kubernetes/
+
+
+
+cat << EOF  > /etc/kubernetes/audit-policy.yaml
+apiVersion: audit.k8s.io/v1beta1 # This is required.
+kind: Policy
+# Don't generate audit events for all requests in RequestReceived stage.
+omitStages:
+  - "RequestReceived"
+rules:
+  # Log pod changes at RequestResponse level
+  - level: RequestResponse
+    resources:
+    - group: ""
+      # Resource "pods" doesn't match requests to any subresource of pods,
+      # which is consistent with the RBAC policy.
+      resources: ["pods"]
+  # Log "pods/log", "pods/status" at Metadata level
+  - level: Metadata
+    resources:
+    - group: ""
+      resources: ["pods/log", "pods/status"]
+
+  # Don't log requests to a configmap called "controller-leader"
+  - level: None
+    resources:
+    - group: ""
+      resources: ["configmaps"]
+      resourceNames: ["controller-leader"]
+
+  # Don't log watch requests by the "system:kube-proxy" on endpoints or services
+  - level: None
+    users: ["system:kube-proxy"]
+    verbs: ["watch"]
+    resources:
+    - group: "" # core API group
+      resources: ["endpoints", "services"]
+
+  # Don't log authenticated requests to certain non-resource URL paths.
+  - level: None
+    userGroups: ["system:authenticated"]
+    nonResourceURLs:
+    - "/api*" # Wildcard matching.
+    - "/version"
+
+  # Log the request body of configmap changes in kube-system.
+  - level: Request
+    resources:
+    - group: "" # core API group
+      resources: ["configmaps"]
+    # This rule only applies to resources in the "kube-system" namespace.
+    # The empty string "" can be used to select non-namespaced resources.
+    namespaces: ["kube-system"]
+
+  # Log configmap and secret changes in all other namespaces at the Metadata level.
+  - level: Metadata
+    resources:
+    - group: "" # core API group
+      resources: ["secrets", "configmaps"]
+
+  # Log all other resources in core and extensions at the Request level.
+  - level: Request
+    resources:
+    - group: "" # core API group
+    - group: "extensions" # Version of group should NOT be included.
+
+  # A catch-all rule to log all other requests at the Metadata level.
+  - level: Metadata
+    # Long-running requests like watches that fall under this rule will not
+    # generate an audit event in RequestReceived.
+    omitStages:
+      - "RequestReceived"
+EOF
+
+
+
+
+cat <<EOF > kube-apiserver.service 
+[Unit]
+Description=Kubernetes API Server
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=network.target
+
+[Service]
+ExecStart=/usr/k8s/bin/kube-apiserver \\
+  --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
+  --advertise-address=${NODE_IP} \\
+  --bind-address=0.0.0.0 \\
+  --insecure-bind-address=${NODE_IP} \\
+  --authorization-mode=Node,RBAC \\
+  --runtime-config=rbac.authorization.k8s.io/v1alpha1 \\
+  --kubelet-https=true \\
+  --enable-bootstrap-token-auth \\
+  --token-auth-file=/etc/kubernetes/token.csv \\
+  --service-cluster-ip-range=${SERVICE_CIDR} \\
+  --service-node-port-range=${NODE_PORT_RANGE} \\
+  --tls-cert-file=/etc/kubernetes/ssl/kubernetes.pem \\
+  --tls-private-key-file=/etc/kubernetes/ssl/kubernetes-key.pem \\
+  --client-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --service-account-key-file=/etc/kubernetes/ssl/ca-key.pem \\
+  --etcd-cafile=/etc/kubernetes/ssl/ca.pem \\
+  --etcd-certfile=/etc/kubernetes/ssl/kubernetes.pem \\
+  --etcd-keyfile=/etc/kubernetes/ssl/kubernetes-key.pem \\
+  --etcd-servers=${ETCD_ENDPOINTS} \\
+  --enable-swagger-ui=true \\
+  --allow-privileged=true \\
+  --apiserver-count=2 \\
+  --audit-log-maxage=30 \\
+  --audit-log-maxbackup=3 \\
+  --audit-log-maxsize=100 \\
+  --audit-log-path=/var/lib/audit.log \\
+  --audit-policy-file=/etc/kubernetes/audit-policy.yaml \\
+  --event-ttl=1h \\
+  --logtostderr=true \\
+  --v=6
+Restart=on-failure
+RestartSec=5
+Type=notify
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+
+
+ sudo cp kube-apiserver.service /etc/systemd/system/
+ sudo systemctl daemon-reload
+ sudo systemctl enable kube-apiserver
+ sudo systemctl start kube-apiserver
+ sudo systemctl status kube-apiserver
+
+
+
+
+
+cat > kube-controller-manager.service <<EOF
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/k8s/bin/kube-controller-manager \\
+  --address=127.0.0.1 \\
+  --master=http://${MASTER_URL}:8080 \\
+  --allocate-node-cidrs=true \\
+  --service-cluster-ip-range=${SERVICE_CIDR} \\
+  --cluster-cidr=${CLUSTER_CIDR} \\
+  --cluster-name=kubernetes \\
+  --cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem \\
+  --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem \\
+  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem \\
+  --root-ca-file=/etc/kubernetes/ssl/ca.pem \\
+  --leader-elect=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+ sudo cp kube-controller-manager.service /etc/systemd/system/
+ sudo systemctl daemon-reload
+ sudo systemctl enable kube-controller-manager
+ sudo systemctl start kube-controller-manager 
+ sudo systemctl status kube-controller-manager
+
+
+
+
+
+
+cat > kube-scheduler.service <<EOF
+[Unit]
+Description=Kubernetes Scheduler
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/k8s/bin/kube-scheduler \\
+  --address=127.0.0.1 \\
+  --master=http://${MASTER_URL}:8080 \\
+  --leader-elect=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+ sudo cp kube-scheduler.service /etc/systemd/system/
+ sudo systemctl daemon-reload
+ sudo systemctl enable kube-scheduler
+ sudo systemctl start kube-scheduler
+ sudo systemctl status kube-scheduler
+
+
+export KUBE_APISERVER="https://${MASTER_URL}:6443"
+
+
+
+
+
+
+
+master01
+
+cat > admin-csr.json <<EOF
+{
+  "CN": "admin",
+  "hosts": [],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "system:masters",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+
+
+ mv admin*.pem /etc/kubernetes/ssl/
+
+   kubectl config set-cluster kubernetes \
+  --certificate-authority=/etc/kubernetes/ssl/ca.pem \
+  --embed-certs=true \
+  --server=${KUBE_APISERVER}
+
+kubectl config set-credentials admin \
+  --client-certificate=/etc/kubernetes/ssl/admin.pem \
+  --embed-certs=true \
+  --client-key=/etc/kubernetes/ssl/admin-key.pem \
+  --token=${BOOTSTRAP_TOKEN}
+
+kubectl config set-context kubernetes \
+  --cluster=kubernetes \
+  --user=admin
+
+ kubectl config use-context kubernetes
+
+
+
+ yum install -y bash-completion 
+locate bash_completion
+source /usr/share/bash-completion/bash_completion 
+source <(kubectl completion bash)
+
+cat << EOF >> /root/.bash_profile
+source /usr/share/bash-completion/bash_completion 
+source <(kubectl completion bash)
+EOF
+source /root/.bash_profile
+
+
+
+scp /root/.kube/config 192.168.224.128:/root/.kube/
+scp /root/.kube/config 192.168.224.129:/root/.kube/
+scp /root/.kube/config 192.168.224.122:/root/.kube/
+scp /root/.kube/config 192.168.224.132:/root/.kube/
+
+
+
+
+
+
+安装node节点
+
+
+在master01上操作
+
+cd /root/ssl/
+
+cat > flanneld-csr.json <<EOF
+{
+  "CN": "flanneld",
+  "hosts": [],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "k8s",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+
+
+cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
+  -ca-key=/etc/kubernetes/ssl/ca-key.pem \
+  -config=/etc/kubernetes/ssl/ca-config.json \
+  -profile=kubernetes flanneld-csr.json | cfssljson -bare flanneld
+
+cp flanneld*.pem  /etc/flanneld/ssl
+scp flanneld*.pem 192.168.224.128:/etc/flanneld/ssl
+scp flanneld*.pem 192.168.224.122:/etc/flanneld/ssl
+scp flanneld*.pem 192.168.224.132:/etc/flanneld/ssl
+scp flanneld*.pem 192.168.224.129:/etc/flanneld/ssl
+
+
+
+etcdctl \
+  --endpoints=${ETCD_ENDPOINTS} \
+  --ca-file=/etc/kubernetes/ssl/ca.pem \
+  --cert-file=/etc/flanneld/ssl/flanneld.pem \
+  --key-file=/etc/flanneld/ssl/flanneld-key.pem \
+  set ${FLANNEL_ETCD_PREFIX}/config '{"Network":"'${CLUSTER_CIDR}'", "SubnetLen": 24, "Backend": {"Type": "vxlan"}}'
+
+
+
+所有node
+
+export KUBE_APISERVER="https://${MASTER_URL}:6443"
+
+
+ cat > flanneld.service << EOF
+[Unit]
+Description=Flanneld overlay address etcd agent
+After=network.target
+After=network-online.target
+Wants=network-online.target
+After=etcd.service
+Before=docker.service
+
+[Service]
+Type=notify
+ExecStart=/usr/k8s/bin/flanneld \\
+  -etcd-cafile=/etc/kubernetes/ssl/ca.pem \\
+  -etcd-certfile=/etc/flanneld/ssl/flanneld.pem \\
+  -etcd-keyfile=/etc/flanneld/ssl/flanneld-key.pem \\
+  -etcd-endpoints=${ETCD_ENDPOINTS} \\
+  -etcd-prefix=${FLANNEL_ETCD_PREFIX}
+ExecStartPost=/usr/k8s/bin/mk-docker-opts.sh -k DOCKER_NETWORK_OPTIONS -d /run/flannel/docker
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=docker.service
+EOF
+
+
+sudo cp flanneld.service /etc/systemd/system/
+sudo systemctl daemon-reload
+ sudo systemctl enable flanneld
+ sudo systemctl start flanneld
+ systemctl status flanneld
+
+
+
+
+在master01上检查
+ # 查看集群 Pod 网段(/16)
+
+ etcdctl \
+  --endpoints=${ETCD_ENDPOINTS} \
+  --ca-file=/etc/kubernetes/ssl/ca.pem \
+  --cert-file=/etc/flanneld/ssl/flanneld.pem \
+  --key-file=/etc/flanneld/ssl/flanneld-key.pem \
+  get ${FLANNEL_ETCD_PREFIX}/config
+  
+ # 查看已分配的 Pod 子网段列表(/24)
+
+ etcdctl \
+  --endpoints=${ETCD_ENDPOINTS} \
+  --ca-file=/etc/kubernetes/ssl/ca.pem \
+  --cert-file=/etc/flanneld/ssl/flanneld.pem \
+  --key-file=/etc/flanneld/ssl/flanneld-key.pem \
+  ls ${FLANNEL_ETCD_PREFIX}/subnets
+
+
+
+所有node
+
+echo 192.168.224.127 k8s-api.virtual.local >> /etc/hosts
+
+
+
+cat  << EOF >> /etc/sysctl.conf
+net.ipv4.ip_forward=1
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+EOF
+
+modprobe br_netfilter
+sysctl -p
+
+
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+sudo yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+sudo yum install docker-ce -y
+
+
+
+
+mv /usr/lib/systemd/system/docker.service /usr/lib/systemd/system/docker.service.bak
+cat << EOF > /usr/lib/systemd/system/docker.service 
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network-online.target firewalld.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+# the default is not to use systemd for cgroups because the delegate issues still
+# exists and systemd currently does not support the cgroup feature set required
+# for containers run by docker
+EnvironmentFile=-/run/flannel/docker
+ExecStart=/usr/bin/dockerd --log-level=info \$DOCKER_NETWORK_OPTIONS
+ExecReload=/bin/kill -s HUP \$MAINPID
+# Having non-zero Limit*s causes performance problems due to accounting overhead
+# in the kernel. We recommend using cgroups to do container-local accounting.
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+# Uncomment TasksMax if your systemd version supports it.
+# Only systemd 226 and above support this version.
+#TasksMax=infinity
+TimeoutStartSec=0
+# set delegate yes so that systemd does not reset the cgroups of docker containers
+Delegate=yes
+# kill only the docker process, not all processes in the cgroup
+KillMode=process
+# restart the docker process if it exits prematurely
+Restart=on-failure
+StartLimitBurst=3
+StartLimitInterval=60s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+
+
+mkdir /etc/docker/
+cat << EOF > /etc/docker/daemon.json
+  {
+    "max-concurrent-downloads": 10
+  }
+EOF
+
+
+
+
+
+systemctl daemon-reload
+systemctl stop firewalld
+systemctl disable firewalld
+systemctl enable docker
+systemctl start docker
+systemctl status docker
+
+
+
+
+
+
+node01上
+
+kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap
+kubectl create clusterrolebinding kubelet-nodes --clusterrole=system:node --group=system:nodes
+ 
+ 
+在master01上操作
+
+/etc/kubernetes/
+
+ kubectl config set-cluster kubernetes \
+  --certificate-authority=/etc/kubernetes/ssl/ca.pem \
+  --embed-certs=true \
+  --server=${KUBE_APISERVER} \
+  --kubeconfig=bootstrap.kubeconfig
+kubectl config set-credentials kubelet-bootstrap \
+  --token=${BOOTSTRAP_TOKEN} \
+  --kubeconfig=bootstrap.kubeconfig
+kubectl config set-context default \
+  --cluster=kubernetes \
+  --user=kubelet-bootstrap \
+  --kubeconfig=bootstrap.kubeconfig
+kubectl config use-context default --kubeconfig=bootstrap.kubeconfig
+ mv bootstrap.kubeconfig /etc/kubernetes/  
+
+
+
+scp /etc/kubernetes/bootstrap.kubeconfig  192.168.224.128:/etc/kubernetes/ 
+scp /etc/kubernetes/bootstrap.kubeconfig  192.168.224.129:/etc/kubernetes/ 
+scp /etc/kubernetes/bootstrap.kubeconfig  192.168.224.122:/etc/kubernetes/ 
+scp /etc/kubernetes/bootstrap.kubeconfig  192.168.224.132:/etc/kubernetes/ 
+
+
+
+
+
+所有node
+
+ 
+ cat > kubelet.service <<EOF
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/var/lib/kubelet
+ExecStart=/usr/k8s/bin/kubelet \\
+  --fail-swap-on=false \\
+  --cgroup-driver=cgroupfs \\
+  --address=${NODE_IP} \\
+  --hostname-override=${NODE_IP} \\
+  --pod-infra-container-image=cnych/pause-amd64:3.0 \\
+  --bootstrap-kubeconfig=/etc/kubernetes/bootstrap.kubeconfig \\
+  --kubeconfig=/etc/kubernetes/kubelet.kubeconfig \\
+  --cert-dir=/etc/kubernetes/ssl \\
+  --cluster-dns=${CLUSTER_DNS_SVC_IP} \\
+  --cluster-domain=${CLUSTER_DNS_DOMAIN} \\
+  --hairpin-mode promiscuous-bridge \\
+  --allow-privileged=true \\
+  --serialize-image-pulls=false \\
+  --logtostderr=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+
+
+
+ sudo cp kubelet.service /etc/systemd/system/kubelet.service
+ sudo systemctl daemon-reload
+ sudo systemctl enable kubelet
+ sudo systemctl start kubelet
+ systemctl status kubelet
+
+
+
+
+
+在master01上操作
+
+for i in `kubectl get csr|awk '{print $1}'|grep -v "NAME"`;do kubectl certificate approve $i;done
+
+检验节点
+ kubectl get csr
+ kubectl get nodes
+
+
+
+
+
+
+
+
+master01
+
+cd /root/ssl
+cat > kube-proxy-csr.json <<EOF
+{
+  "CN": "system:kube-proxy",
+  "hosts": [],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "k8s",
+      "OU": "System"
+    }
+  ]
+}
+EOF
+
+
+cfssl gencert -ca=/etc/kubernetes/ssl/ca.pem \
+  -ca-key=/etc/kubernetes/ssl/ca-key.pem \
+  -config=/etc/kubernetes/ssl/ca-config.json \
+  -profile=kubernetes kube-proxy-csr.json | cfssljson -bare kube-proxy
+
+scp  kube-proxy*.pem 192.168.224.122:/etc/kubernetes/ssl/
+scp  kube-proxy*.pem 192.168.224.132:/etc/kubernetes/ssl/ 
+scp  kube-proxy*.pem 192.168.224.129:/etc/kubernetes/ssl/ 
+
+
+
+
+
+
+所有node
+
+kubectl config set-cluster kubernetes \
+  --certificate-authority=/etc/kubernetes/ssl/ca.pem \
+  --embed-certs=true \
+  --server=${KUBE_APISERVER} \
+  --kubeconfig=kube-proxy.kubeconfig
+ kubectl config set-credentials kube-proxy \
+  --client-certificate=/etc/kubernetes/ssl/kube-proxy.pem \
+  --client-key=/etc/kubernetes/ssl/kube-proxy-key.pem \
+  --embed-certs=true \
+  --kubeconfig=kube-proxy.kubeconfig
+ kubectl config set-context default \
+  --cluster=kubernetes \
+  --user=kube-proxy \
+  --kubeconfig=kube-proxy.kubeconfig
+ kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+ mv kube-proxy.kubeconfig /etc/kubernetes/
+
+
+
+
+
+
+cat > kube-proxy.service <<EOF
+[Unit]
+Description=Kubernetes Kube-Proxy Server
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=network.target
+
+[Service]
+WorkingDirectory=/var/lib/kube-proxy
+ExecStart=/usr/k8s/bin/kube-proxy \\
+  --bind-address=${NODE_IP} \\
+  --hostname-override=${NODE_IP} \\
+  --cluster-cidr=${SERVICE_CIDR} \\
+  --kubeconfig=/etc/kubernetes/kube-proxy.kubeconfig \\
+  --logtostderr=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+
+
+ sudo cp kube-proxy.service /etc/systemd/system/
+ sudo systemctl daemon-reload
+ sudo systemctl enable kube-proxy
+ sudo systemctl start kube-proxy
+ systemctl status kube-proxy
+
+
+
+
+
+
+测试
+master01
+
+
+cat << EOF > test-nginx.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-ds
+  labels:
+    app: nginx-ds
+spec:
+  type: NodePort
+  selector:
+    app: nginx-ds
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: nginx-ds
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  template:
+    metadata:
+      labels:
+        app: nginx-ds
+    spec:
+      containers:
+      - name: my-nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+EOF
+
+ kubectl  create -f test-nginx.yaml
+
+
+
+
+
+查看
+kubectl  get pod,svc -o wide
+ 
+
+
+
+
+安装dns
+master01
+
+
+
+
+cat << EOF > kube-dns.yaml
+# Copyright 2016 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Should keep target in cluster/addons/dns-horizontal-autoscaler/dns-horizontal-autoscaler.yaml
+# in sync with this file.
+
+# __MACHINE_GENERATED_WARNING__
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-dns
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+    kubernetes.io/name: "KubeDNS"
+spec:
+  selector:
+    k8s-app: kube-dns
+  clusterIP: 10.254.0.2
+  ports:
+  - name: dns
+    port: 53
+    protocol: UDP
+  - name: dns-tcp
+    port: 53
+    protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-dns
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-dns
+  namespace: kube-system
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kube-dns
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  # replicas: not specified here:
+  # 1. In order to make Addon Manager do not reconcile this replicas parameter.
+  # 2. Default is 1.
+  # 3. Will be tuned in real time if DNS horizontal auto-scaling is turned on.
+  strategy:
+    rollingUpdate:
+      maxSurge: 10%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-dns
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        seccomp.security.alpha.kubernetes.io/pod: 'docker/default'
+    spec:
+      priorityClassName: system-cluster-critical
+      tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+      volumes:
+      - name: kube-dns-config
+        configMap:
+          name: kube-dns
+          optional: true
+      containers:
+      - name: kubedns
+        image: 13660129620/k8s-dns-kube-dns-amd64:1.14.10
+        resources:
+          # TODO: Set memory limits when we've profiled the container for large
+          # clusters, then set request = limit to keep this container in
+          # guaranteed class. Currently, this container falls into the
+          # "burstable" category so the kubelet doesn't backoff from restarting it.
+          limits:
+            memory: 170Mi
+          requests:
+            cpu: 100m
+            memory: 70Mi
+        livenessProbe:
+          httpGet:
+            path: /healthcheck/kubedns
+            port: 10054
+            scheme: HTTP
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8081
+            scheme: HTTP
+          # we poll on pod startup for the Kubernetes master service and
+          # only setup the /readiness HTTP server once that's available.
+          initialDelaySeconds: 3
+          timeoutSeconds: 5
+        args:
+        - --domain=cluster.local.
+        - --dns-port=10053
+        - --config-dir=/kube-dns-config
+        - --v=2
+        env:
+        - name: PROMETHEUS_PORT
+          value: "10055"
+        ports:
+        - containerPort: 10053
+          name: dns-local
+          protocol: UDP
+        - containerPort: 10053
+          name: dns-tcp-local
+          protocol: TCP
+        - containerPort: 10055
+          name: metrics
+          protocol: TCP
+        volumeMounts:
+        - name: kube-dns-config
+          mountPath: /kube-dns-config
+      - name: dnsmasq
+        image: 13660129620/k8s-dns-dnsmasq-nanny-amd64:1.14.10
+        livenessProbe:
+          httpGet:
+            path: /healthcheck/dnsmasq
+            port: 10054
+            scheme: HTTP
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        args:
+        - -v=2
+        - -logtostderr
+        - -configDir=/etc/k8s/dns/dnsmasq-nanny
+        - -restartDnsmasq=true
+        - --
+        - -k
+        - --cache-size=1000
+        - --no-negcache
+        - --log-facility=-
+        - --server=/cluster.local/127.0.0.1#10053
+        - --server=/in-addr.arpa/127.0.0.1#10053
+        - --server=/ip6.arpa/127.0.0.1#10053
+        ports:
+        - containerPort: 53
+          name: dns
+          protocol: UDP
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        # see: https://github.com/kubernetes/kubernetes/issues/29055 for details
+        resources:
+          requests:
+            cpu: 150m
+            memory: 20Mi
+        volumeMounts:
+        - name: kube-dns-config
+          mountPath: /etc/k8s/dns/dnsmasq-nanny
+      - name: sidecar
+        image: 13660129620/k8s-dns-sidecar-amd64:1.14.10
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 10054
+            scheme: HTTP
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        args:
+        - --v=2
+        - --logtostderr
+        - --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local.,5,SRV
+        - --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local.,5,SRV
+        ports:
+        - containerPort: 10054
+          name: metrics
+          protocol: TCP
+        resources:
+          requests:
+            memory: 20Mi
+            cpu: 10m
+      dnsPolicy: Default  # Don't use cluster DNS.
+      serviceAccountName: kube-dns
+EOF
+
+
+
+检查
+
+ kubectl  get po,svc -n kube-system
+
+
+
+cat > my-nginx.yaml<<EOF
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: my-nginx
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: my-nginx
+    spec:
+      containers:
+      - name: my-nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+EOF
+
+
+
+
+kubectl  create -f my-nginx.yaml
+kubectl expose deploy my-nginx
+
+
+
+
+kubectl  get po,svc -o wide
+
+
+
+cat > pod-nginx.yaml<<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+    ports:
+    - containerPort: 80
+EOF
+
+
+kubectl create -f pod-nginx.yaml
+
+
+kubectl  get po,svc -o wide
+
+
+进入容器
+kubectl exec nginx -it -- /bin/bash
+
+
+查看解析
+root@nginx:/# cat /etc/resolv.conf
+
+nameserver 10.254.0.2
+search default.svc.cluster.local. svc.cluster.local. cluster.local. localdomain
+options ndots:5
+
+
+
+安装dashboard
+
+
+
+cd && mkdir dashboard && cd dashboard
+
+cat << EOF > kubernetes-dashboard.yaml
+# Copyright 2017 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ------------------- Dashboard Secret ------------------- #
+
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard-certs
+  namespace: kube-system
+type: Opaque
+
+---
+# ------------------- Dashboard Service Account ------------------- #
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
+
+---
+# ------------------- Dashboard Role & Role Binding ------------------- #
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubernetes-dashboard-minimal
+  namespace: kube-system
+rules:
+  # Allow Dashboard to create 'kubernetes-dashboard-key-holder' secret.
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create"]
+  # Allow Dashboard to create 'kubernetes-dashboard-settings' config map.
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+  # Allow Dashboard to get, update and delete Dashboard exclusive secrets.
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["kubernetes-dashboard-key-holder", "kubernetes-dashboard-certs"]
+  verbs: ["get", "update", "delete"]
+  # Allow Dashboard to get and update 'kubernetes-dashboard-settings' config map.
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["kubernetes-dashboard-settings"]
+  verbs: ["get", "update"]
+  # Allow Dashboard to get metrics from heapster.
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: ["heapster"]
+  verbs: ["proxy"]
+- apiGroups: [""]
+  resources: ["services/proxy"]
+  resourceNames: ["heapster", "http:heapster:", "https:heapster:"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernetes-dashboard-minimal
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubernetes-dashboard-minimal
+subjects:
+- kind: ServiceAccount
+  name: kubernetes-dashboard
+  namespace: kube-system
+
+---
+# ------------------- Dashboard Deployment ------------------- #
+
+kind: Deployment
+apiVersion: apps/v1beta2
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      k8s-app: kubernetes-dashboard
+  template:
+    metadata:
+      labels:
+        k8s-app: kubernetes-dashboard
+    spec:
+      containers:
+      - name: kubernetes-dashboard
+        image: 13660129620/kubernetes-dashboard-amd64:v1.10.0
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+        args:
+          - --auto-generate-certificates
+          # Uncomment the following line to manually specify Kubernetes API server Host
+          # If not specified, Dashboard will attempt to auto discover the API server and connect
+          # to it. Uncomment only if the default does not work.
+          # - --apiserver-host=http://my-address:port
+        volumeMounts:
+        - name: kubernetes-dashboard-certs
+          mountPath: /certs
+          # Create on-disk volume to store exec logs
+        - mountPath: /tmp
+          name: tmp-volume
+        livenessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /
+            port: 8443
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+      volumes:
+      - name: kubernetes-dashboard-certs
+        secret:
+          secretName: kubernetes-dashboard-certs
+      - name: tmp-volume
+        emptyDir: {}
+      serviceAccountName: kubernetes-dashboard
+      # Comment the following tolerations if Dashboard must not be deployed on master
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+
+---
+# ------------------- Dashboard Service ------------------- #
+
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
+spec:
+  type: NodePort
+  ports:
+    - port: 443
+      targetPort: 8443
+  selector:
+    k8s-app: kubernetes-dashboard
+EOF
+
+
+
+
+ kubectl create -f kubernetes-dashboard.yaml
+
+
+
+
+
+
+
+
+
+cat <<EOF> admin-sa.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: admin
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: admin
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+EOF
+
+
+
+
+
+kubectl  create -f admin-sa.yaml
+
+ 
+
+获取tocken，登陆dashboard
+
+ kubectl get secret $(kubectl get secret -n kube-system|grep admin-token | awk '{ print $1 }') -o jsonpath={.data.token} -n kube-system |base64 -d
+
+eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi10b2tlbi1uejdnayIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJhZG1pbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjkzZmVkZjUyLWYxOWYtMTFlOC1hMjY4LTAwMGMyOTFkODEzZSIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlLXN5c3RlbTphZG1pbiJ9.oHJ5TbEZayEERsWaUKOBqXATLJV2rIwX0BNU3dLGS17zHqeke3XWBE3X1uEZmebr4VqkFyo3nB7w7zUIHTbCct_Wt-pLHtrE-Ri8cRjllZQpqusoJSIXYAH1McMNk6rnaf_36MUhfCzVfkbSbo4NQcKUwiwAdryOk4J5ERUsByLiEuQxTeWeuOjVBRN0ST3vTLw9xV25wMF4SGk7ONMNDaGN996Ff1S86ydNxGzEYGvY82jTbtjtg79ifeGZRB4qIKQoSMdAlgZnfQn3QdBMAy5OfFKa-kNUYByvPfkak6YIUXj_3juGJKWFmFdd8jUphFKr5uhD9NriYGHaTYLTeg
+
+
+
+kubectl  get pods,svc -o wide -n kube-system 
+
+
+
+
+浏览器访问，注意要加https，而且用火狐浏览器：
+
+https://192.168.224.132:30742/
+
+用这个tocken登陆
+eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi10b2tlbi1jcXh3cSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJhZG1pbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6ImVkYzkyMGUwLWYxNGQtMTFlOC05MzFhLTAwMGMyOTFkODEzZSIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlLXN5c3RlbTphZG1pbiJ9.QWzqHwHT-CYR4sOrDgzJhI_E-4ny04E18g-DiQvj4mvrq-T4neKPAA4_S_m3-RGJyCWqBwKnzBFClAfJps4IeeFDu3cSi6_gJtL3F_oJoXk-Hm2d04zotiJtMPFaDZVcHam2qsHW4Re1pTPmuXsh0_V-EJLESZp6slAcDOqWruLlvoXAj_dYs7VNx737j2DPvcBGjN_f_uUFQaIhgLoOcVQOq5UWVk2Nf734CPr-tHYwwOUTJ2AKYTQ2DZBVxNAPL64ztpXBiKJnXH32YMh_01i0ZzxjjMe08srCm_YLcJNQ9FSXxhLPMOSoKu7MctKCofQdsXRsplOCplipxggH7g
+
+
+
+
+安装heapster
+
+
+cd && mkdir heapster && cd heapster
+wget https://github.com/kubernetes/heapster/archive/v1.5.4.tar.gz
+tar xvf v1.5.4.tar.gz
+ cd /root/heapster/heapster-1.5.4/deploy/kube-config
+kubectl create -f rbac/heapster-rbac.yaml
+ 
+
+
+sed -i 's@gcr.io/google_containers/heapster-grafana-amd64:v4.4.3@13660129620/heapster-grafana-amd64:v4.4.3@' /root/heapster/heapster-1.5.4/deploy/kube-config/influxdb/grafana.yaml
+
+sed -i 's@gcr.io/google_containers/heapster-amd64:v1.5.3@13660129620/heapster-amd64:v1.5.3@' /root/heapster/heapster-1.5.4/deploy/kube-config/influxdb/heapster.yaml
+ 
+sed -i 's@gcr.io/google_containers/heapster-influxdb-amd64:v1.3.3@13660129620/heapster-influxdb-amd64:v1.3.3@' /root/heapster/heapster-1.5.4/deploy/kube-config/influxdb/influxdb.yaml
+
+sed -i 's@# type: NodePort@type: NodePort@' /root/heapster/heapster-1.5.4/deploy/kube-config/influxdb/grafana.yaml
+
+
+
+kubectl create -f /root/heapster/heapster-1.5.4/deploy/kube-config/influxdb/
+
+
+检查
+[root@master01 kube-config]# kubectl  get  deployments -n kube-system
+NAME                   DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+heapster               1         1         1            0           46s
+kube-dns               1         1         1            1           1h
+kubernetes-dashboard   1         1         1            1           50m
+monitoring-grafana     1         1         1            0           46s
+monitoring-influxdb    1         1         1            1           46s
+
+
+[root@master01 kube-config]# kubectl  get  po -n kube-system
+NAME                                   READY     STATUS              RESTARTS   AGE
+heapster-5c687df859-kpplr              1/1       Running             0          1m
+kube-dns-586dd7f95d-8jcf5              3/3       Running             0          1h
+kubernetes-dashboard-66754996d-ln9x8   1/1       Running             0          51m
+monitoring-grafana-744f9ccb7f-qb8lh    0/1       ContainerCreating   0          1m
+monitoring-influxdb-66b9d58979-zqkd5   1/1       Running             0          1m
+
+
+
+火狐浏览器访问，检查是否出现图表：
+
+https://192.168.224.132:30742/
+
+
+还需要添加
+
+cd ; cd dashboard
+在这段行下
+        args:
+          - --auto-generate-certificates
+
+添加：
+          - --heapster-host=http://heapster
+
+
+
+更新
+
+ kubectl  apply -f kubernetes-dashboard.yaml
+
+如果不行则删除再创建
+
+
+访问grafana
+
+[root@master01 influxdb]# kubectl  get svc -n kube-system
+NAME                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)         AGE
+monitoring-grafana     NodePort    10.254.160.102   <none>        80:31056/TCP    25m
+
+浏览器访问
+
+http://192.168.224.132:31056
+
+
+
+
+安装ingress
+
+
+cd ; mkdir ingress ; cd ingress
+
+
+cat << EOF > ingress-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ingress
+  namespace: kube-system
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: ingress
+subjects:
+  - kind: ServiceAccount
+    name: ingress
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+EOF
+
+
+
+cat << EOF > traefik-daemonset.yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: traefik-conf
+  namespace: kube-system
+data:
+  traefik-config: |-
+    defaultEntryPoints = ["http"]
+    [entryPoints]
+      [entryPoints.http]
+      address = ":80"
+
+
+---
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: traefik-ingress
+  namespace: kube-system
+  labels:
+    k8s-app: traefik-ingress
+spec:
+  template:
+    metadata:
+      labels:
+        k8s-app: traefik-ingress
+        name: traefik-ingress
+    spec:
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+      serviceAccountName: ingress
+      containers:
+      - image: traefik:1.5.3
+        name: traefik-ingress
+        ports:
+        - name: http
+          containerPort: 80
+          hostPort: 80
+        - name: https
+          containerPort: 443
+          hostPort: 443
+        - name: admin
+          containerPort: 8080
+        args:
+        - --configFile=/etc/traefik/traefik.toml
+        - -d
+        - --web
+        - --kubernetes
+        - --logLevel=DEBUG
+        volumeMounts:
+        - name: traefik-config-volume
+          mountPath: /etc/traefik
+      volumes:
+      - name: traefik-config-volume
+        configMap:
+          name: traefik-conf
+          items:
+          - key: traefik-config
+            path: traefik.toml
+EOF
+
+
+ kubectl  create -f /root/ingress/
+
+
+检查
+[root@master01 ingress]# kubectl  get po -o wide -n kube-system
+NAME                                    READY     STATUS    RESTARTS   AGE       IP            NODE
+traefik-ingress-59s8r                   1/1       Running   0          1m        172.30.87.8   192.168.224.132
+traefik-ingress-lk5w4                   1/1       Running   0          1m        172.30.85.6   192.168.224.122
+
+
+
+测试访问
+
+
+
+cat << EOF > traefik-ui.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-ui
+  namespace: kube-system
+spec:
+  selector:
+    k8s-app: traefik-ingress
+  ports:
+  - name: web
+    port: 80
+    targetPort: 8080
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: traefik-ui
+  namespace: kube-system
+spec:
+  rules:
+  - host: traefik.ydzs.io
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: traefik-ui
+          servicePort: web
+EOF
+
+
+
+ kubectl  create -f traefik-ui.yaml
+
+访问
+traefik.ydzs.io
+
+
+
+
+测试示例2：为default命名空间的nginx创建ingress
+
+
+
+cat << EOF > traefik-default.yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: traefik-default
+spec:
+  rules:
+  - host: nginx.ydzs.io
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: my-nginx
+          servicePort: 80
+EOF
+
+
+kubectl create -f traefik-default.yaml
+
+
+刷新traefik.ydzs.io看有没有看到nginx.ydzs.io域名
+
+访问看能否出现默认页
+nginx.ydzs.io
+
+
+
+
+
