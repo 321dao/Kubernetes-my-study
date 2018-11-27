@@ -46,6 +46,72 @@ spec:
           servicePort: 80
 EOF
 
+
+
+
+案例3：
+cat << EOF > nginx-deployment.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpanginx-deployment
+  labels:
+    app: hpanginx
+spec:
+  replicas: 4
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: hpanginx
+  template:
+    metadata:
+      labels:
+        app: hpanginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "25m"
+          limits:
+            memory: "128Mi"
+            cpu: "50m"
+---
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    app: hpanginx
+  name: nginx-deployment-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app: hpanginx
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-deployment-service-ingress
+spec:
+  rules:
+    - host: nginx-deployment.chenlei.com
+      http:
+        paths:
+          - backend:
+              serviceName: nginx-deployment-service
+              servicePort: 80
+EOF
+
+
+
 注意：每一个节点都要有nginx-ingress-controller，例如有三个节点，
 
 但kubectl get po -o wide -n ingress-nginx | grep controller 查看只有两个nginx-ingress-controller，则用下面命令扩充
