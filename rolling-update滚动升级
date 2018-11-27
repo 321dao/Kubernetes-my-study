@@ -14,3 +14,62 @@ Kubernetes能够智能地判断升级中断之前的状态，然后紧接着继�
 
 回退的方式实际就是升级的逆操作，即逐步增加v1.0版本Pod的副本数，逐步减少v2版本Pod的副本数。
 
+
+
+
+下面配置添加了更新策略，nginx版本从1.79更新到最新版
+
+cat << EOF > deploy-demo.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  labels:
+    k8s-app: nginx-demo
+spec:
+  replicas: 3
+  revisionHistoryLimit: 15
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+EOF
+
+
+
+详细解析：
+revisionHistoryLimit: 15 回滚数量控制，保留15个
+
+minReadySeconds: 5
+strategy:  升级策略
+  # indicate which strategy we want for rolling update
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 1
+
+minReadySeconds:
+Kubernetes在等待设置的时间后才进行升级
+如果没有设置该值，Kubernetes会假设该容器启动起来后就提供服务了
+如果没有设置该值，在某些极端情况下可能会造成服务服务正常运行
+
+maxSurge:
+升级过程中最多可以比原先设置多出的POD数量
+例如：maxSurge=1，replicas=5,则表示Kubernetes会先启动1一个新的Pod后才删掉一个旧的POD，整个升级过程中最多会有5+1个POD。
+
+maxUnavaible:
+升级过程中最多有多少个POD处于无法提供服务的状态
+当maxSurge不为0时，该值也不能为0
+例如：maxUnavaible=1，则表示Kubernetes整个升级过程中最多会有1个POD处于无法服务的状态。
