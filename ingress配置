@@ -49,7 +49,7 @@ EOF
 
 
 
-案例3：
+实战案例3：
 cat << EOF > nginx-deployment.yaml 
 apiVersion: apps/v1
 kind: Deployment
