@@ -1,0 +1,148 @@
+参考官方文档
+https://github.com/kubernetes/dashboard
+
+
+wget https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
+
+
+
+sed -i 's@k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0@k8s.gcr.io/kubernetes-dashboard-amd64:v1.8.3@' kubernetes-dashboard.yaml
+
+sed -i '158itype: NodePort' kubernetes-dashboard.yaml
+
+需要进去修改缩进 vim kubernetes-dashboard.yaml
+
+
+kubectl create -f kubernetes-dashboard.yaml
+
+kubectl get svc kubernetes-dashboard -n kube-system
+
+
+
+为master添加污点
+kubectl taint nodes master key=value:NoSchedule
+
+这个命令的效果是任何Pod不会被调度到节点master上，除非这个Pod具有相应的toleration。
+
+
+
+
+为master删除刚才添加的taints，如下：
+kubectl taint nodes master key:NoSchedule-
+
+
+
+
+[root@Master ~]# kubectl  get po -n kube-system -o wide
+NAME                                    READY     STATUS    RESTARTS   AGE       IP                NODE
+etcd-master                             1/1       Running   1          11h       192.168.224.131   master
+kube-apiserver-master                   1/1       Running   1          11h       192.168.224.131   master
+kube-controller-manager-master          1/1       Running   1          11h       192.168.224.131   master
+kube-dns-86f4d74b45-tl75h               3/3       Running   3          11h       10.244.0.3        master
+kube-flannel-ds-amd64-2z4tw             1/1       Running   1          11h       192.168.224.131   master
+kube-flannel-ds-amd64-s2wr5             1/1       Running   1          11h       192.168.224.132   node
+kube-proxy-q9xcd                        1/1       Running   1          11h       192.168.224.132   node
+kube-proxy-vrspm                        1/1       Running   1          11h       192.168.224.131   master
+kube-scheduler-master                   1/1       Running   1          11h       192.168.224.131   master
+kubernetes-dashboard-7d5dcdb6d9-vv6qq   1/1       Running   0          27s       10.244.1.2        node
+
+[root@Master ~]# kubectl get svc -n kube-system
+NAME                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)         AGE
+kube-dns               ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP   12h
+kubernetes-dashboard   NodePort    10.100.121.87   <none>        443:31046/TCP   29m
+
+
+
+要用火狐浏览器访问；
+https://192.168.224.132:31046
+
+登陆时需要tocken
+
+令牌
+每个服务帐号都有一条保密字典保存持有者令牌，用来在仪表板登录，请浏览验证一节，了解更多关于如何配置和使用持有者令牌的信息
+输入令牌
+
+
+创建角色
+
+cat << EOF > admin-account.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: admin
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: admin
+  namespace: kube-system
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+EOF
+
+
+ kubectl apply -f admin-account.yaml
+
+上面的admin用户创建完成后我们就可以获取到该用户对应的token了，如下命令：
+
+[root@Master ~]# kubectl get serviceaccount -n kube-system
+NAME                                 SECRETS   AGE
+admin                                1         3m
+
+
+查找admin的tocken
+
+
+综合命令
+admintoken=$(kubectl get secret -n kube-system|grep admin-token | awk '{print $1}') && kubectl describe secret  $admintoken  -n kube-system | grep token:
+
+
+
+命令分解：
+
+[root@Master ~]# kubectl describe serviceaccount admin -n kube-system
+Name:                admin
+Namespace:           kube-system
+Labels:              addonmanager.kubernetes.io/mode=Reconcile
+                     kubernetes.io/cluster-service=true
+Annotations:         kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"v1","kind":"ServiceAccount","metadata":{"annotations":{},"labels":{"addonmanager.kubernetes.io/mode":"Reconcile","kubernetes.io/cluster-...
+Image pull secrets:  <none>
+Mountable secrets:   admin-token-xll74
+Tokens:              admin-token-xll74
+Events:              <none>
+
+或者这样查找
+[root@Master ~]#  kubectl get secret -n kube-system|grep admin-token
+admin-token-xll74                                kubernetes.io/service-account-token   3         7m
+
+[root@Master ~]# kubectl describe secret  admin-token-xll74  -n kube-system
+Name:         admin-token-xll74
+Namespace:    kube-system
+Labels:       <none>
+Annotations:  kubernetes.io/service-account.name=admin
+              kubernetes.io/service-account.uid=22981105-d739-11e8-8383-000c291d813e
+
+Type:  kubernetes.io/service-account-token
+
+Data
+====
+ca.crt:     1025 bytes
+namespace:  11 bytes
+token:      eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi10b2tlbi14bGw3NCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJhZG1pbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjIyOTgxMTA1LWQ3MzktMTFlOC04MzgzLTAwMGMyOTFkODEzZSIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlLXN5c3RlbTphZG1pbiJ9.Ni6Gu11rbTZ00IV2ItX5lY1rjpSOEJ-zpfI3kgp6AgPfaCDl-HDhCJsgE56NQTJNz4jRqfxiF5iyFzXPBrb5F2N06rlzexah_L7RzK8_NJRID8i2qqZ-4bmsVxONnf-zz8U0vfhWeIhlfaLgOtPvQdZ1Oa8Bo3eTqHL-hr3PAc-2N6FoDtzd4zGZdLADby8ny72dgmYa5M9_8ocu15bIZs0n8ckXFsn4LR8fcxS4Pp4u2AGCSlYMFtbXTpsObWMALU_n5bWzqNrF7pncRYip8G53iqme-51m8vFSaVN3E-BBja_joAeIqXHYaIp90o5zsU74s_X3TLuiPJDO81SVsQ
+
+
+将上面的tocken输入登陆界面，即可登陆
+
+
