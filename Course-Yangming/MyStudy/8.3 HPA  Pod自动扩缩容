@@ -197,19 +197,6 @@ EOF
 
 
 
-[root@Master ~]# kubectl  create -f hpa-demo.yaml
-deployment.apps "hpa-demo" created
-
-
-
-[root@Master ~]# kubectl  get deploy
-NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-hpa-demo       1         1         1            1           26s
-
-
-[root@Master ~]# kubectl  get po | grep hpa
-hpa-demo-6bc5854677-87br2       1/1       Running   0          1m
-
 
 需要修改kube-controller-manager.yaml配置，使其支持pod自动扩展
 
@@ -250,6 +237,21 @@ systemctl restart kube-controller-manager
 systemctl status kube-controller-manager
 
 
+
+
+
+[root@Master ~]# kubectl  create -f hpa-demo.yaml
+deployment.apps "hpa-demo" created
+
+
+
+[root@Master ~]# kubectl  get deploy
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+hpa-demo       1         1         1            1           26s
+
+
+[root@Master ~]# kubectl  get po | grep hpa
+hpa-demo-6bc5854677-87br2       1/1       Running   0          1m
 
 
 
