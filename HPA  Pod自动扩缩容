@@ -1,4 +1,20 @@
 Pod 自动扩缩容
+
+命令创建，如果不知道api类型，可以先创建查看
+
+kubectl run php-apache --image=nginx --requests=cpu=200m --expose --port=80
+
+kubectl autoscale deployment php-apache --cpu-percent=50 --min=1 --max=10
+
+[root@master01 pha]# kubectl get po | grep apach
+php-apache-7fd4489764-r2jw6                      1/1       Running   0          2m
+
+[root@master01 pha]# kubectl  get po  php-apache-7fd4489764-r2jw6 -o yaml
+apiVersion: v1
+kind: Pod
+
+
+
 在前面的课程中，我们提到过通过手工执行kubectl scale命令和在Dashboard上操作可以实现Pod的扩缩容，但是这样毕竟需要每次去手工操作一次，而且指不定什么时候业务请求量就很大了，所以如果不能做到自动化的去扩缩容的话，这也是一个很麻烦的事情。如果Kubernetes系统能够根据Pod当前的负载的变化情况来自动的进行扩缩容就好了，因为这个过程本来就是不固定的，频繁发生的，所以纯手工的方式不是很现实。
 
 幸运的是Kubernetes为我们提供了这样一个资源对象：Horizontal Pod Autoscaling（Pod水平自动伸缩），简称HPA。HAP通过监控分析RC或者Deployment控制的所有Pod的负载变化情况来确定是否需要调整Pod的副本数量，这是HPA最基本的原理。
