@@ -1,0 +1,510 @@
+Pod 自动扩缩容
+在前面的课程中，我们提到过通过手工执行kubectl scale命令和在Dashboard上操作可以实现Pod的扩缩容，但是这样毕竟需要每次去手工操作一次，而且指不定什么时候业务请求量就很大了，所以如果不能做到自动化的去扩缩容的话，这也是一个很麻烦的事情。如果Kubernetes系统能够根据Pod当前的负载的变化情况来自动的进行扩缩容就好了，因为这个过程本来就是不固定的，频繁发生的，所以纯手工的方式不是很现实。
+
+幸运的是Kubernetes为我们提供了这样一个资源对象：Horizontal Pod Autoscaling（Pod水平自动伸缩），简称HPA。HAP通过监控分析RC或者Deployment控制的所有Pod的负载变化情况来确定是否需要调整Pod的副本数量，这是HPA最基本的原理。
+
+hpa
+hpa
+HPA在kubernetes集群中被设计成一个controller，我们可以简单的通过kubectl autoscale命令来创建一个HPA资源对象，HPA Controller默认30s轮询一次（可通过kube-controller-manager的标志--horizontal-pod-autoscaler-sync-period进行设置），查询指定的资源（RC或者Deployment）中Pod的资源使用率，并且与创建时设定的值和指标做对比，从而实现自动伸缩的功能。
+
+当你创建了HPA后，HPA会从Heapster或者用户自定义的RESTClient端获取每一个一个Pod利用率或原始值的平均值，然后和HPA中定义的指标进行对比，同时计算出需要伸缩的具体值并进行相应的操作。目前，HPA可以从两个地方获取数据：
+
+Heapster：仅支持CPU使用率
+自定义监控：我们到后面的监控的课程中再给大家讲解这部分的使用方法
+我们这节课来给大家介绍从Heapster获取监控数据来进行自动扩缩容的方法，所以首先我们得安装Heapster，前面我们在kubeadm搭建集群的课程中，实际上我们已经默认把Heapster相关的镜像都已经拉取到节点上了，所以接下来我们只需要部署即可，我们这里使用的是Heapster 1.4.2 版本的，前往Heapster的github页面：
+
+https://github.com/kubernetes/heapster
+
+
+[root@Master ~]# git clone https://github.com/kubernetes/heapster.git
+
+cd /root/heapster/deploy/kube-config/influxdb
+
+
+sed -i 's@heapster-amd64:v1.5.4@heapster-amd64:v1.4.2@' heapster.yaml
+
+sed -i 's@heapster-grafana-amd64:v5.0.4@heapster-grafana-amd64:v4.4.3@' grafana.yaml
+
+sed -i 's@heapster-influxdb-amd64:v1.5.2@heapster-influxdb-amd64:v1.3.3@' influxdb.yaml
+
+kubectl apply -f .
+
+[root@Master influxdb]# kubectl logs heapster-676cc864c6-k2xvc -n kube-system
+E1025 01:37:37.125931       1 reflector.go:190] k8s.io/heapster/metrics/heapster.go:322: Failed to list *v1.Pod: pods is forbidden: User "system:serviceaccount:kube-system:heapster" cannot list pods at the cluster scope
+
+报错：pods is forbidden: cannot list pods at the cluster scope
+
+需要角色权限绑定
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin
+  namespace: kube-system
+
+
+
+完整的配置如下：
+
+cat << EOF > heapster.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heapster
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: heapster-admin
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: heapster
+  namespace: kube-system
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: heapster
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        task: monitoring
+        k8s-app: heapster
+    spec:
+      serviceAccountName: heapster
+      containers:
+      - name: heapster
+        image: k8s.gcr.io/heapster-amd64:v1.4.2
+        imagePullPolicy: IfNotPresent
+        command:
+        - /heapster
+        - --source=kubernetes:https://kubernetes.default
+        - --sink=influxdb:http://monitoring-influxdb.kube-system.svc:8086
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    task: monitoring
+    # For use as a Cluster add-on (https://github.com/kubernetes/kubernetes/tree/master/cluster/addons)
+    # If you are NOT using this as an addon, you should comment out this line.
+    kubernetes.io/cluster-service: 'true'
+    kubernetes.io/name: Heapster
+  name: heapster
+  namespace: kube-system
+spec:
+  ports:
+  - port: 80
+    targetPort: 8082
+  selector:
+    k8s-app: heapster
+EOF
+
+删除所有
+[root@Master influxdb]# kubectl  delete -f .
+deployment.extensions "monitoring-grafana" deleted
+service "monitoring-grafana" deleted
+serviceaccount "heapster" deleted
+clusterrolebinding.rbac.authorization.k8s.io "heapster-admin" deleted
+deployment.extensions "heapster" deleted
+service "heapster" deleted
+deployment.extensions "monitoring-influxdb" deleted
+service "monitoring-influxdb" deleted
+
+创建所有
+[root@Master influxdb]# kubectl  create -f .
+deployment.extensions "monitoring-grafana" created
+service "monitoring-grafana" created
+serviceaccount "heapster" created
+clusterrolebinding.rbac.authorization.k8s.io "heapster-admin" created
+deployment.extensions "heapster" created
+service "heapster" created
+deployment.extensions "monitoring-influxdb" created
+service "monitoring-influxdb" created
+
+查看日志
+[root@Master influxdb]# kubectl  logs -f heapster-676cc864c6-mnxx7 -n kube-system
+I1025 02:13:47.418481       1 heapster.go:72] /heapster --source=kubernetes:https://kubernetes.default --sink=influxdb:http://monitoring-influxdb.kube-system.svc:8086
+I1025 02:13:47.418533       1 heapster.go:73] Heapster version v1.4.2
+I1025 02:13:47.418942       1 configs.go:61] Using Kubernetes client with master "https://kubernetes.default" and version v1
+I1025 02:13:47.418960       1 configs.go:62] Using kubelet port 10255
+I1025 02:13:47.450524       1 influxdb.go:278] created influxdb sink with options: host:monitoring-influxdb.kube-system.svc:8086 user:root db:k8s
+I1025 02:13:47.450549       1 heapster.go:196] Starting with InfluxDB Sink
+I1025 02:13:47.450555       1 heapster.go:196] Starting with Metric Sink
+I1025 02:13:47.460040       1 heapster.go:106] Starting heapster on port 8082
+I1025 02:14:05.071818       1 influxdb.go:241] Created database "k8s" on influxDB server at "monitoring-influxdb.kube-system.svc:8086"
+
+回到dashboard查看,火狐浏览器
+
+https://192.168.224.132:31046
+
+
+我们将该目录下面的yaml文件保存到我们的集群上，然后使用kubectl命令行工具创建即可，另外创建完成后，如果需要在Dashboard当中看到监控图表，我们还需要在Dashboard中配置上我们的heapster-host。
+
+同样的，我们来创建一个Deployment管理的Nginx Pod，然后利用HPA来进行自动扩缩容。定义Deployment的YAML文件如下：（hpa-demo.yaml）
+
+
+cat << EOF > hpa-demo.yaml
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: hpa-demo
+  labels:
+    app: hpa
+spec:
+  revisionHistoryLimit: 15
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1  
+  template:
+    metadata:
+      labels:
+        app: hpa
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          requests:
+            cpu: "100m" 
+        ports:
+        - containerPort: 80
+EOF
+
+
+
+
+[root@Master ~]# kubectl  create -f hpa-demo.yaml
+deployment.apps "hpa-demo" created
+
+
+
+[root@Master ~]# kubectl  get deploy
+NAME           DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+hpa-demo       1         1         1            1           26s
+
+
+[root@Master ~]# kubectl  get po | grep hpa
+hpa-demo-6bc5854677-87br2       1/1       Running   0          1m
+
+
+需要修改kube-controller-manager.yaml配置，使其支持pod自动扩展
+
+查找位置
+[root@Master ~]# ps xua | grep kubelet
+root      1502  2.8  4.4 766832 78848 ?        Ssl  10月24  34:45 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --pod-manifest-path=/etc/kubernetes/manifests --allow-privileged=true --network-plugin=cni --cni-conf-dir=/etc/cni/net.d --cni-bin-dir=/opt/cni/bin --cluster-dns=10.96.0.10 --cluster-domain=cluster.local --authorization-mode=Webhook --client-ca-file=/etc/kubernetes/pki/ca.crt --cadvisor-port=0 --cgroup-driver=cgroupfs --rotate-certificates=true --cert-dir=/var/lib/kubelet/pki --fail-swap-on=false
+
+其中--pod-manifest-path=/etc/kubernetes/manifests 就是放kube-controller-manager.yaml的位置,在对应位置添加
+- --horizontal-pod-autoscaler-use-rest-clients=false
+
+具体如下
+
+ vim /etc/kubernetes/manifests/kube-controller-manager.yaml
+spec:
+  containers:
+  - command:
+    - kube-controller-manager
+    - --horizontal-pod-autoscaler-use-rest-clients=false
+    - --address=127.0.0.1
+
+
+静态pod改了后自动更新，所以不用操作其他
+
+二进制方式搭建的，需要将
+
+--horizontal-pod-autoscaler-use-rest-clients=false \
+
+
+配置加入 
+
+vim /etc/systemd/system/kube-controller-manager.service
+
+
+重启
+
+systemctl daemon-reload
+systemctl restart kube-controller-manager
+systemctl status kube-controller-manager
+
+
+
+
+
+现在我们来创建一个HPA，可以使用kubectl autoscale命令来创建：
+
+[root@Master manifests]# kubectl autoscale deployment hpa-demo --min=1 --max=10 --cpu-percent=5
+
+deployment.apps "hpa-demo" autoscaled
+
+
+其他示例；
+
+Examples:
+  # Auto scale a deployment "foo", with the number of pods between 2 and 10, no target CPU utilization specified so a
+default autoscaling policy will be used:
+  kubectl autoscale deployment foo --min=2 --max=10
+
+  # Auto scale a replication controller "foo", with the number of pods between 1 and 5, target CPU utilization at 80%:
+  kubectl autoscale rc foo --max=5 --cpu-percent=80
+
+
+  
+
+
+[root@Master manifests]# kubectl  get hpa
+NAME       REFERENCE             TARGETS        MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   <unknown>/5%   1         10        1          54s
+
+
+查看描述
+
+[root@Master ~]# kubectl  get hpa
+NAME       REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   0%/5%     1         10        1          2h
+
+
+[root@Master ~]# kubectl describe hpa hpa-demo
+Name:                                                  hpa-demo
+Namespace:                                             default
+Labels:                                                <none>
+Annotations:                                           <none>
+CreationTimestamp:                                     Thu, 25 Oct 2018 11:27:44 +0800
+Reference:                                             Deployment/hpa-demo
+Metrics:                                               ( current / target )
+  resource cpu on pods  (as a percentage of request):  0% (0) / 5%
+Min replicas:                                          1
+Max replicas:                                          10
+Conditions:
+  Type            Status  Reason            Message
+  ----            ------  ------            -------
+  AbleToScale     True    ReadyForNewScale  the last scale time was sufficiently old as to warrant a new scale
+  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from cpu resource utilization (percentage of request)
+  ScalingLimited  True    TooFewReplicas    the desired replica count is increasing faster than the maximum scale rate
+Events:           <none>
+
+
+
+增加负载，已测试自动扩容
+
+
+
+
+
+此命令创建了一个关联资源 hpa-demo 的HPA，最小的 pod 副本数为1，最大为10。HPA会根据设定的 cpu使用率（10%）动态的增加或者减少pod数量。
+
+当然出来使用kubectl autoscale命令来创建外，我们依然可以通过创建YAML文件的形式来创建HPA资源对象。如果我们不知道怎么编写的话，可以查看上面命令行创建的HPA的YAML文件：
+
+$ kubectl get hpa hpa-demo  -o yaml
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  creationTimestamp: 2017-06-29T08:04:08Z
+  name: nginxtest
+  namespace: default
+  resourceVersion: "951016361"
+  selfLink: /apis/autoscaling/v1/namespaces/default/horizontalpodautoscalers/nginxtest
+  uid: 86febb63-5ca1-11e7-aaef-5254004e79a3
+spec:
+  maxReplicas: 5 //资源最大副本数
+  minReplicas: 1 //资源最小副本数
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment //需要伸缩的资源类型
+    name: nginxtest  //需要伸缩的资源名称
+  targetCPUUtilizationPercentage: 50 //触发伸缩的cpu使用率
+status:
+  currentCPUUtilizationPercentage: 48 //当前资源下pod的cpu使用率
+  currentReplicas: 1 //当前的副本数
+  desiredReplicas: 2 //期望的副本数
+  lastScaleTime: 2017-07-03T06:32:19Z
+好，现在我们根据上面的YAML文件就可以自己来创建一个基于YAML的HPA描述文件了。
+
+现在我们来增大负载进行测试，我们来创建一个busybox，并且循环访问上面创建的服务。
+
+$ kubectl run -i --tty load-generator --image=busybox /bin/sh
+ 
+/ # while true; do wget -q -O- http://172.16.255.60; done
+
+下图可以看到，HPA已经开始工作。
+$ kubectl get hpa
+NAME        REFERENCE              TARGET    CURRENT   MINPODS   MAXPODS   AGE
+hpa-demo   Deployment/hpa-demo   10%       29%        1         10        27m
+
+
+[root@Master ~]# kubectl  describe hpa hpa-demo
+Name:                                                  hpa-demo
+Namespace:                                             default
+Labels:                                                <none>
+Annotations:                                           <none>
+CreationTimestamp:                                     Thu, 25 Oct 2018 11:27:44 +0800
+Reference:                                             Deployment/hpa-demo
+Metrics:                                               ( current / target )
+  resource cpu on pods  (as a percentage of request):  26% (26m) / 5%
+Min replicas:                                          1
+Max replicas:                                          10
+Conditions:
+  Type            Status  Reason            Message
+  ----            ------  ------            -------
+  AbleToScale     False   BackoffBoth       the time since the previous scale is still within both the downscale and upscale forbidden windows
+  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from cpu resource utilization (percentage of request)
+  ScalingLimited  True    TooManyReplicas   the desired replica count is more than the maximum replica count
+Events:
+  Type    Reason             Age   From                       Message
+  ----    ------             ----  ----                       -------
+  Normal  SuccessfulRescale  4m    horizontal-pod-autoscaler  New size: 4; reason: cpu resource utilization (percentage of request) above target
+  Normal  SuccessfulRescale  44s   horizontal-pod-autoscaler  New size: 8; reason: cpu resource utilization (percentage of request) above target
+
+
+
+[root@Master ~]# kubectl  get po | grep hpa-demo | wc -l
+8
+
+
+
+同时我们查看相关资源hpa-demo的副本数量，副本数量已经从原来的1变成了3。
+$ kubectl get deployment hpa-demo
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+hpa-demo   3         3         3            3           4d
+
+
+同时再次查看HPA，由于副本数量的增加，使用率也保持在了10%左右。
+
+$ kubectl get hpa
+NAME        REFERENCE              TARGET    CURRENT   MINPODS   MAXPODS   AGE
+hpa-demo   Deployment/hpa-demo   10%       9%        1         10        35m
+同样的这个时候我们来关掉busybox来减少负载，然后等待一段时间观察下HPA和Deployment对象
+
+$ kubectl get hpa     
+NAME        REFERENCE              TARGET    CURRENT   MINPODS   MAXPODS   AGE
+hpa-demo   Deployment/hpa-demo   10%       0%        1         10        48m
+
+
+$ kubectl get deployment hpa-demo
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+hpa-demo   1         1         1            1           4d
+
+
+
+可以看到副本数量已经由3变为1。
+
+不过当前的HPA只有CPU使用率这一个指标，还不是很灵活的，在后面的课程中我们来根据我们自定义的监控来自动对Pod进行扩缩容。
+
+
+ kubectl autoscale deployment hpa-demo --min=1 --max=10 --cpu-percent=5
+
+该命令等价于  
+
+[root@Master ~]# kubectl  get hpa hpa-demo -o yaml
+
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-demo
+  namespace: default
+spec:
+  maxReplicas: 10
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: hpa-demo
+  targetCPUUtilizationPercentage: 5
+
+
+
+  完整hpa的yaml示例
+
+
+cat << EOF > hpa-demo.yaml
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: hpa-demo
+  labels:
+    app: hpa
+spec:
+  revisionHistoryLimit: 15
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1  
+  template:
+    metadata:
+      labels:
+        app: hpa
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          requests:
+            cpu: 100m 
+        ports:
+        - containerPort: 80
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-demo
+  namespace: default
+spec:
+  maxReplicas: 10
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: hpa-demo
+  targetCPUUtilizationPercentage: 5
+EOF
+
+
+
+
+重新部署一次
+
+删除原来的
+[root@Master ~]# kubectl  delete -f hpa-demo.yaml
+deployment.apps "hpa-demo" deleted
+
+[root@Master ~]# kubectl  delete hpa hpa-demo
+horizontalpodautoscaler.autoscaling "hpa-demo" deleted
+
+
+
+[root@Master ~]# kubectl  create -f hpa-demo.yaml
+deployment.apps "hpa-demo" created
+horizontalpodautoscaler.autoscaling "hpa-demo" created
+
+
+检查
+[root@Master ~]# kubectl  get hpa
+NAME       REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   0%/5%     1         10        1          3m
+
+
