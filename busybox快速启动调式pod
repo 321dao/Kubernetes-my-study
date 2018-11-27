@@ -6,3 +6,7 @@ kubectl run -i --tty --image busybox dns-test --restart=Never --rm /bin/sh
 nslookup web-0.nginx
 
 
+for i in {1..10000}; do curl http://nginx-deployment.chenlei.com/ > /dev/null -s; done;
+
+
+  while true; do wget -q -O- http://172.30.74.9; done
