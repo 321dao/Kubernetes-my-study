@@ -73,3 +73,54 @@ maxUnavaible:
 升级过程中最多有多少个POD处于无法提供服务的状态
 当maxSurge不为0时，该值也不能为0
 例如：maxUnavaible=1，则表示Kubernetes整个升级过程中最多会有1个POD处于无法服务的状态。
+
+
+
+
+完整示例：
+
+
+cat << EOF > service-demo.yaml
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  labels:
+    k8s-app: nginx-demo
+spec:
+  replicas: 3
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.12.2
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata: 
+  name: myservice
+spec:
+  selector:
+    app: nginx
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    name: myapp-http
+EOF
+
+
+
+
