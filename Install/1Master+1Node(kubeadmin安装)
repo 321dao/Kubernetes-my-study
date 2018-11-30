@@ -30,6 +30,316 @@ setenforce 0
 sed -i 's/enforcing/disabled/g' /etc/selinux/config
 
 cat << EOF >> /etc/hosts
+192.168.1.58  new-llhome-pro
+192.168.1.43  JAVA-back-05
+EOF
+
+
+cat << EOF > /etc/sysctl.d/k8s.conf 
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+modprobe br_netfilter
+sysctl -p /etc/sysctl.d/k8s.conf
+
+
+
+
+
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+sudo yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+yum update
+yum install docker-ce-18.06.1.ce -y
+systemctl enable  docker 
+systemctl daemon-reload
+sudo service docker start
+service docker status
+
+
+
+
+
+master节点，执行下面的命令：
+
+
+docker pull cnych/kube-apiserver-amd64:v1.10.0
+docker pull cnych/kube-scheduler-amd64:v1.10.0
+docker pull cnych/kube-controller-manager-amd64:v1.10.0
+docker pull cnych/kube-proxy-amd64:v1.10.0
+docker pull cnych/k8s-dns-kube-dns-amd64:1.14.8
+docker pull cnych/k8s-dns-dnsmasq-nanny-amd64:1.14.8
+docker pull cnych/k8s-dns-sidecar-amd64:1.14.8
+docker pull cnych/etcd-amd64:3.1.12
+docker pull cnych/flannel:v0.10.0-amd64
+docker pull cnych/pause-amd64:3.1
+
+docker tag cnych/kube-apiserver-amd64:v1.10.0 k8s.gcr.io/kube-apiserver-amd64:v1.10.0
+docker tag cnych/kube-scheduler-amd64:v1.10.0 k8s.gcr.io/kube-scheduler-amd64:v1.10.0
+docker tag cnych/kube-controller-manager-amd64:v1.10.0 k8s.gcr.io/kube-controller-manager-amd64:v1.10.0
+docker tag cnych/kube-proxy-amd64:v1.10.0 k8s.gcr.io/kube-proxy-amd64:v1.10.0
+docker tag cnych/k8s-dns-kube-dns-amd64:1.14.8 k8s.gcr.io/k8s-dns-kube-dns-amd64:1.14.8
+docker tag cnych/k8s-dns-dnsmasq-nanny-amd64:1.14.8 k8s.gcr.io/k8s-dns-dnsmasq-nanny-amd64:1.14.8
+docker tag cnych/k8s-dns-sidecar-amd64:1.14.8 k8s.gcr.io/k8s-dns-sidecar-amd64:1.14.8
+docker tag cnych/etcd-amd64:3.1.12 k8s.gcr.io/etcd-amd64:3.1.12
+docker tag cnych/flannel:v0.10.0-amd64 quay.io/coreos/flannel:v0.10.0-amd64
+docker tag cnych/pause-amd64:3.1 k8s.gcr.io/pause-amd64:3.1
+
+
+
+
+
+Node上，执行下面的命令：
+
+
+
+docker pull cnych/kube-proxy-amd64:v1.10.0
+docker pull cnych/flannel:v0.10.0-amd64
+docker pull cnych/pause-amd64:3.1
+docker pull cnych/kubernetes-dashboard-amd64:v1.8.3
+docker pull cnych/heapster-influxdb-amd64:v1.3.3
+docker pull cnych/heapster-grafana-amd64:v4.4.3
+docker pull cnych/heapster-amd64:v1.4.2
+docker pull cnych/k8s-dns-kube-dns-amd64:1.14.8
+docker pull cnych/k8s-dns-dnsmasq-nanny-amd64:1.14.8
+docker pull cnych/k8s-dns-sidecar-amd64:1.14.8
+
+docker tag cnych/flannel:v0.10.0-amd64 quay.io/coreos/flannel:v0.10.0-amd64
+docker tag cnych/pause-amd64:3.1 k8s.gcr.io/pause-amd64:3.1
+docker tag cnych/kube-proxy-amd64:v1.10.0 k8s.gcr.io/kube-proxy-amd64:v1.10.0
+
+docker tag cnych/k8s-dns-kube-dns-amd64:1.14.8 k8s.gcr.io/k8s-dns-kube-dns-amd64:1.14.8
+docker tag cnych/k8s-dns-dnsmasq-nanny-amd64:1.14.8 k8s.gcr.io/k8s-dns-dnsmasq-nanny-amd64:1.14.8
+docker tag cnych/k8s-dns-sidecar-amd64:1.14.8 k8s.gcr.io/k8s-dns-sidecar-amd64:1.14.8
+
+docker tag cnych/kubernetes-dashboard-amd64:v1.8.3 k8s.gcr.io/kubernetes-dashboard-amd64:v1.8.3
+docker tag cnych/heapster-influxdb-amd64:v1.3.3 k8s.gcr.io/heapster-influxdb-amd64:v1.3.3
+docker tag cnych/heapster-grafana-amd64:v4.4.3 k8s.gcr.io/heapster-grafana-amd64:v4.4.3
+docker tag cnych/heapster-amd64:v1.4.2 k8s.gcr.io/heapster-amd64:v1.4.2
+
+
+
+
+
+
+
+上面的这些镜像是在 Node 节点中需要用到的镜像，在 join 节点之前也需要先下载到节点上面。
+
+
+
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
+        http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+EOF
+
+
+
+yum makecache fast && yum install -y kubelet-1.10.0-0 kubeadm-1.10.0-0 kubectl-1.10.0-0
+
+
+sed -i 's/systemd/cgroupfs/g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+
+sed -i '10 iEnvironment="KUBELET_EXTRA_ARGS=--fail-swap-on=false"' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+
+systemctl enable  kubelet 
+systemctl daemon-reload
+sudo service kubelet start
+service kubelet status
+
+swapoff -a
+
+
+kubeadm init --kubernetes-version=v1.10.0 --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.1.58 --ignore-preflight-errors=Swap
+
+ 
+
+记录，node节点待会用到
+  kubeadm join 192.168.1.58:6443 --token 6ikqqg.rv18p7opbbi24n3i --discovery-token-ca-cert-hash sha256:421ec3d59d4659a960edb338e7ea3bff8ebde2e3bb65c559bfbd9923774e1d66
+
+
+
+
+参考文档
+https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/
+
+
+创建
+ 
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+ 
+
+wget https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
+
+下载下来的文件里面的镜像要改成对应已经下载好的镜像
+
+[root@Master ~]# docker images | grep flan
+quay.io/coreos/flannel                     v0.10.0-amd64       f0fad859c909        9 months ago        44.6MB
+
+
+
+注意： 另外需要注意的是如果你的节点有多个网卡的话，需要在 kube-flannel.yml 中使用--iface参数指定集群主机内网网卡的名称，否则可能会出现 dns 无法解析。flanneld 启动参数加上--iface=<iface-name>
+
+在yaml文件中添加
+args:
+- --ip-masq
+- --kube-subnet-mgr
+- --iface=eth0
+
+
+创建
+
+kubectl apply -f kube-flannel.yml
+
+
+查看状态
+[root@Master ~]# kubectl  get po --all-namespaces
+NAMESPACE     NAME                             READY     STATUS    RESTARTS   AGE
+kube-system   etcd-master                      1/1       Running   0          13m
+kube-system   kube-apiserver-master            1/1       Running   1          11m
+kube-system   kube-controller-manager-master   1/1       Running   1          1m
+kube-system   kube-dns-86f4d74b45-h6bdn        3/3       Running   0          35m
+kube-system   kube-flannel-ds-amd64-jx846      1/1       Running   0          1m
+kube-system   kube-proxy-z2bgj                 1/1       Running   0          35m
+kube-system   kube-scheduler-master            1/1       Running   1          15m
+
+
+
+[root@Master ~]# kubectl get no
+NAME      STATUS    ROLES     AGE       VERSION
+master    Ready     master    37m       v1.10.0
+
+
+
+
+
+在节点添加
+  kubeadm join 192.168.1.58:6443 --token 6ikqqg.rv18p7opbbi24n3i --discovery-token-ca-cert-hash sha256:421ec3d59d4659a960edb338e7ea3bff8ebde2e3bb65c559bfbd9923774e1d66
+
+
+
+
+如果忘记了上面的token和哈希值，可以用下面的命令查看
+[root@Master ~]# kubeadm token list
+TOKEN                     TTL       EXPIRES                     USAGES                   DESCRIPTION                           EXTRA GROUPS
+uv4szq.pyjxblmogt6dx3hp   23h       2018-10-24T16:32:30+08:00   authentication,signing   The default bootstrap token generated by 'kubeadm init'.   system:bootstrappers:kubeadm:default-node-token
+
+
+哈希值的获取
+ openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+
+
+[root@Master ~]# kubectl get nodes
+NAME      STATUS    ROLES     AGE       VERSION
+master    Ready     master    1h        v1.10.0
+node      Ready     <none>    15m       v1.10.0
+
+
+
+
+[root@Master ~]# kubectl  get cs
+NAME                 STATUS    MESSAGE              ERROR
+scheduler            Healthy   ok
+controller-manager   Healthy   ok
+etcd-0               Healthy   {"health": "true"}
+
+
+
+证书请求插叙
+
+[root@Master ~]# kubectl get csr
+NAME                                                   AGE       REQUESTOR                 CONDITION
+csr-djdf9                                              1h        system:node:master        Approved,Issued
+node-csr-W6R5-kq2ZepPL5uchGS2U5fYtmBEENKiC5IZ7eK-5-8   18m       system:bootstrap:uv4szq   Approved,Issued
+
+
+
+查看所有命名空间下的po
+
+[root@Master ~]# kubectl  get po --all-namespaces -o wide
+NAMESPACE     NAME                             READY     STATUS    RESTARTS   AGE       IP                NODE
+kube-system   etcd-master                      1/1       Running   0          46m       192.168.1.58   master
+kube-system   kube-apiserver-master            1/1       Running   1          43m       192.168.1.58   master
+kube-system   kube-controller-manager-master   1/1       Running   1          34m       192.168.1.58   master
+kube-system   kube-dns-86f4d74b45-h6bdn        3/3       Running   0          1h        10.244.0.2        master
+kube-system   kube-flannel-ds-amd64-jx846      1/1       Running   0          34m       192.168.1.58   master
+kube-system   kube-flannel-ds-amd64-wqvn5      1/1       Running   0          21m       192.168.1.43   node
+kube-system   kube-proxy-nljtb                 1/1       Running   0          21m       192.168.1.43   node
+kube-system   kube-proxy-z2bgj                 1/1       Running   0          1h        192.168.1.58   master
+kube-system   kube-scheduler-master            1/1       Running   1          48m       192.168.1.58   master
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+完
+
+
+
+
+
+
+===================================================================================================
+
+
+修改前
+
+各自节点执行
+
+hostnamectl --static set-hostname Master
+hostnamectl --static set-hostname Node
+
+
+
+所有节点执行
+
+systemctl daemon-reload
+systemctl stop firewalld
+systemctl disable firewalld
+
+
+
+
+yum install iptables-services telnet nmap -y
+systemctl enable iptables
+systemctl restart iptables
+iptables -F
+iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
+iptables -I INPUT -p tcp --dport 3306 -j ACCEPT
+service iptables save
+
+
+
+setenforce 0
+sed -i 's/enforcing/disabled/g' /etc/selinux/config
+
+cat << EOF >> /etc/hosts
 192.168.224.131  Master
 192.168.224.132  Node
 EOF
