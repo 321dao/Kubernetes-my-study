@@ -15,19 +15,26 @@ kind: Pod
 
 
 
-在前面的课程中，我们提到过通过手工执行kubectl scale命令和在Dashboard上操作可以实现Pod的扩缩容，但是这样毕竟需要每次去手工操作一次，而且指不定什么时候业务请求量就很大了，所以如果不能做到自动化的去扩缩容的话，这也是一个很麻烦的事情。如果Kubernetes系统能够根据Pod当前的负载的变化情况来自动的进行扩缩容就好了，因为这个过程本来就是不固定的，频繁发生的，所以纯手工的方式不是很现实。
+在前面的课程中，我们提到过通过手工执行kubectl scale命令和在Dashboard上操作可以实现Pod的扩缩容，但是这样毕竟需要每次去手工操作一次，而且指不定什么时
+候业务请求量就很大了，所以如果不能做到自动化的去扩缩容的话，这也是一个很麻烦的事情。如果Kubernetes系统能够根据Pod当前的负载的变化情况来自动的进行
+扩缩容就好了，因为这个过程本来就是不固定的，频繁发生的，所以纯手工的方式不是很现实。
 
-幸运的是Kubernetes为我们提供了这样一个资源对象：Horizontal Pod Autoscaling（Pod水平自动伸缩），简称HPA。HAP通过监控分析RC或者Deployment控制的所有Pod的负载变化情况来确定是否需要调整Pod的副本数量，这是HPA最基本的原理。
+幸运的是Kubernetes为我们提供了这样一个资源对象：Horizontal Pod Autoscaling（Pod水平自动伸缩），简称HPA。HAP通过监控分析RC或者Deployment控制的
+所有Pod的负载变化情况来确定是否需要调整Pod的副本数量，这是HPA最基本的原理。
 
 hpa
 hpa
-HPA在kubernetes集群中被设计成一个controller，我们可以简单的通过kubectl autoscale命令来创建一个HPA资源对象，HPA Controller默认30s轮询一次（可通过kube-controller-manager的标志--horizontal-pod-autoscaler-sync-period进行设置），查询指定的资源（RC或者Deployment）中Pod的资源使用率，并且与创建时设定的值和指标做对比，从而实现自动伸缩的功能。
+HPA在kubernetes集群中被设计成一个controller，我们可以简单的通过kubectl autoscale命令来创建一个HPA资源对象，HPA Controller默认30s轮询一次
+（可通过kube-controller-manager的标志--horizontal-pod-autoscaler-sync-period进行设置），查询指定的资源（RC或者Deployment）中Pod的资源使用率，
+并且与创建时设定的值和指标做对比，从而实现自动伸缩的功能。
 
-当你创建了HPA后，HPA会从Heapster或者用户自定义的RESTClient端获取每一个一个Pod利用率或原始值的平均值，然后和HPA中定义的指标进行对比，同时计算出需要伸缩的具体值并进行相应的操作。目前，HPA可以从两个地方获取数据：
+当你创建了HPA后，HPA会从Heapster或者用户自定义的RESTClient端获取每一个一个Pod利用率或原始值的平均值，然后和HPA中定义的指标进行对比，同时计算出需要
+伸缩的具体值并进行相应的操作。目前，HPA可以从两个地方获取数据：
 
 Heapster：仅支持CPU使用率
 自定义监控：我们到后面的监控的课程中再给大家讲解这部分的使用方法
-我们这节课来给大家介绍从Heapster获取监控数据来进行自动扩缩容的方法，所以首先我们得安装Heapster，前面我们在kubeadm搭建集群的课程中，实际上我们已经默认把Heapster相关的镜像都已经拉取到节点上了，所以接下来我们只需要部署即可，我们这里使用的是Heapster 1.4.2 版本的，前往Heapster的github页面：
+我们这节课来给大家介绍从Heapster获取监控数据来进行自动扩缩容的方法，所以首先我们得安装Heapster，前面我们在kubeadm搭建集群的课程中，实际上我们已经默
+认把Heapster相关的镜像都已经拉取到节点上了，所以接下来我们只需要部署即可，我们这里使用的是Heapster 1.4.2 版本的，前往Heapster的github页面：
 
 https://github.com/kubernetes/heapster
 
@@ -152,12 +159,12 @@ deployment.extensions "monitoring-grafana" created
 service "monitoring-grafana" created
 serviceaccount "heapster" created
 clusterrolebinding.rbac.authorization.k8s.io "heapster-admin" created
-deployment.extensions "heapster" created
+deployment.extensions "heapster" created                                    
 service "heapster" created
 deployment.extensions "monitoring-influxdb" created
 service "monitoring-influxdb" created
 
-查看日志
+查看日志  
 [root@Master influxdb]# kubectl  logs -f heapster-676cc864c6-mnxx7 -n kube-system
 I1025 02:13:47.418481       1 heapster.go:72] /heapster --source=kubernetes:https://kubernetes.default --sink=influxdb:http://monitoring-influxdb.kube-system.svc:8086
 I1025 02:13:47.418533       1 heapster.go:73] Heapster version v1.4.2
